@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 # =============================================================================
-# SKRIPT PRO TVORBU PREZENTACE (PowerPoint)
-# Semestrální projekt VMM – Střelecká úspěšnost
-# DESIGN: Čistý, minimalistický, čistě bílé pozadí (#FFFFFF), 50/50 symetrie
+# SKRIPT PRO GENEROVÁNÍ PREZENTACE (PowerPoint PPTX)
+# Semestrální projekt VMM – Střelecká úspěšnost (Premier League)
+# 14 SLIDŮ: Čistě BÍLÉ pozadí (#FFFFFF), symetrické rozvržení 50/50, bez deformace
 # =============================================================================
 
 import os
@@ -13,27 +13,26 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
 
 # ── Cesty ──────────────────────────────────────────────────────────────────
-BASE     = os.path.join(os.path.dirname(__file__), '..')
-VYSTUPY  = os.path.join(BASE, 'vystupy')
-PPTX_OUT = os.path.join(BASE, 'prezentace', 'prezentace_strelecka_uspesnost.pptx')
-os.makedirs(os.path.join(BASE, 'prezentace'), exist_ok=True)
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+VYSTUPY_DIR = os.path.join(BASE_DIR, 'vystupy')
+PPTX_PATH = os.path.join(BASE_DIR, 'prezentace', 'prezentace_strelecka_uspesnost.pptx')
+os.makedirs(os.path.join(BASE_DIR, 'prezentace'), exist_ok=True)
 
-# ── Barvy (čistá minimalistická paleta) ─────────────────────────────────────
-BILA        = RGBColor(0xFF, 0xFF, 0xFF)   # #FFFFFF - čistě bílé pozadí
-CERNA       = RGBColor(0x1A, 0x1A, 0x1A)   # #1A1A1A - hlavní nadpisy
-TMAVA_SEDA  = RGBColor(0x33, 0x33, 0x33)   # #333333 - text odrážek
-STRED_SEDA  = RGBColor(0x66, 0x66, 0x66)   # #666666 - podtitulky, doplňující text
-SVETLA_SEDA = RGBColor(0xD8, 0xD8, 0xD8)   # #D8D8D8 - jemné oddělovací linky
-OKRAJOVA_S  = RGBColor(0xCC, 0xCC, 0xCC)   # #CCCCCC - rámečky
-CERVENA     = RGBColor(0xC5, 0x30, 0x30)   # #C53030 - zamítnutí H0
-ZELENA      = RGBColor(0x27, 0x67, 0x49)   # #276749 - nezamítnutí H0
-MODRA_AKCENT= RGBColor(0x1F, 0x77, 0xB4)   # #1F77B4 - odrážky, decentní akcent
+# ── Barevná paleta pro čistý bílý styl ──────────────────────────────────────
+BILA         = RGBColor(0xFF, 0xFF, 0xFF)   # #FFFFFF – Čistě bílé pozadí
+CERNA        = RGBColor(0x1A, 0x1A, 0x1A)   # #1A1A1A – Hlavní nadpisy
+TMAVA_SEDA   = RGBColor(0x33, 0x33, 0x33)   # #333333 – Běžný text a odrážky
+STRED_SEDA   = RGBColor(0x66, 0x66, 0x66)   # #666666 – Doplňující text, čísla slidů
+SVETLA_SEDA  = RGBColor(0xD8, 0xD8, 0xD8)   # #D8D8D8 – Oddělovací linky
+CERVENA_ZAM  = RGBColor(0xC5, 0x30, 0x30)   # #C53030 – Zamítnutí H0
+ZELENA_NEZAM = RGBColor(0x27, 0x67, 0x49)   # #276749 – Nezamítnutí H0
+MODRA_BOD    = RGBColor(0x1F, 0x77, 0xB4)   # #1F77B4 – Odrážky a decentní akcent
 
-# ── Rozměry snímku 16:9 ────────────────────────────────────────────────────
+# ── Prezentace 16:9 ────────────────────────────────────────────────────────
 prs = Presentation()
 prs.slide_width  = Inches(13.33)
 prs.slide_height = Inches(7.5)
-BLANK = prs.slide_layouts[6]   # čistý prázdný layout
+BLANK = prs.slide_layouts[6]   # Čisté prázdné rozvržení
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -52,7 +51,7 @@ def novy_slide():
 def text_pole(slide, text, l, t, w, h,
               font_size=13, bold=False, italic=False,
               fg=TMAVA_SEDA, align=PP_ALIGN.LEFT, wrap=True):
-    """Vloží jednoduché textové pole bez pozadí."""
+    """Vloží jednoduché textové pole na snímek."""
     txb = slide.shapes.add_textbox(Inches(l), Inches(t), Inches(w), Inches(h))
     txb.word_wrap = wrap
     tf = txb.text_frame
@@ -69,7 +68,7 @@ def text_pole(slide, text, l, t, w, h,
 
 
 def linka(slide, l, t, w, tloustka=0.015, barva=SVETLA_SEDA):
-    """Nakreslí tenkou decentní horizontální linku."""
+    """Vykreslí tenkou decentní linku."""
     sh = slide.shapes.add_shape(1, Inches(l), Inches(t), Inches(w), Inches(tloustka))
     sh.fill.solid()
     sh.fill.fore_color.rgb = barva
@@ -77,77 +76,76 @@ def linka(slide, l, t, w, tloustka=0.015, barva=SVETLA_SEDA):
     return sh
 
 
-def hlavicka(slide, nadpis, podtitulek=None):
+def zahlavi(slide, nadpis, podtitulek=None):
     """
-    Standardní čisté záhlaví:
-    Černý nadpis vlevo nahoře (22 pt, bold) + volitelný podtitulek + tenká šedá linka.
-    Žádné barevné pruhy, pouze čistá plocha.
+    Standardní čisté záhlaví pro snímky 2 až 14:
+    Černý tučný nadpis vlevo nahoře (22 pt) + volitelný podtitulek + tenká šedá linka.
     """
-    text_pole(slide, nadpis, 0.8, 0.45, 11.73, 0.55,
+    text_pole(slide, nadpis, 0.65, 0.40, 12.0, 0.55,
               font_size=22, bold=True, fg=CERNA)
     if podtitulek:
-        text_pole(slide, podtitulek, 0.8, 0.98, 11.73, 0.3,
+        text_pole(slide, podtitulek, 0.65, 0.95, 12.0, 0.32,
                   font_size=11, italic=True, fg=STRED_SEDA)
-        linka(slide, 0.8, 1.30, 11.73)
+        linka(slide, 0.65, 1.28, 12.0)
     else:
-        linka(slide, 0.8, 1.15, 11.73)
+        linka(slide, 0.65, 1.05, 12.0)
 
 
-def cislo_slidu(slide, n, total=12):
-    """Číslo slidu v pravém dolním rohu."""
-    text_pole(slide, f'{n} / {total}', 11.7, 7.05, 0.8, 0.3,
-              font_size=9, fg=STRED_SEDA, align=PP_ALIGN.RIGHT)
+def cislo_slidu(slide, n, total=14):
+    """Vloží číslo snímku v pravém dolním rohu."""
+    text_pole(slide, f'{n} / {total}', 11.9, 7.05, 0.8, 0.3,
+              font_size=9.5, fg=STRED_SEDA, align=PP_ALIGN.RIGHT)
 
 
-def vloz_obrazek(slide, soubor, l=0.8, t=1.45, sirka_palce=6.4):
+def vloz_velky_graf(slide, soubor, l=0.65, t=1.35, sirka_palce=6.8):
     """
-    Vloží obrázek se zachováním poměru stran:
-    ZADÁVÁ POUZE ŠÍŘKU (width)! Výška je dopočítána automaticky a nedochází k deformaci.
+    Vloží obrázek grafu z vystupy/ se striktním zachováním poměru stran:
+    ZADÁVÁME POUZE ŠÍŘKU (width=6.8 palce)! Výška je dopočítána automaticky a nedochází k deformaci.
     """
-    cesta = os.path.join(VYSTUPY, soubor)
+    cesta = os.path.join(VYSTUPY_DIR, soubor)
     if not os.path.exists(cesta):
         print(f'  [VAROVÁNÍ] Obrázek nenalezen: {soubor}')
         return None
     return slide.shapes.add_picture(cesta, Inches(l), Inches(t), width=Inches(sirka_palce))
 
 
-def odrazky_blok(slide, body, l=7.5, t=1.45, w=5.0, h=3.0, font_size=13.5):
-    """Vytvoří blok odrážek (max 3–4 stručné body v tmavě šedém textu)."""
+def odrazky_sloupec(slide, body, l=7.75, t=1.35, w=4.95, h=3.1, font_size=13.5):
+    """Vloží sloupec s max 3–4 věcnými odrážkami v tmavě šedé barvě."""
     txb = slide.shapes.add_textbox(Inches(l), Inches(t), Inches(w), Inches(h))
     txb.word_wrap = True
     tf = txb.text_frame
     tf.word_wrap = True
     for i, bod in enumerate(body):
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
-        p.space_before = Pt(8)
+        p.space_before = Pt(7)
         p.line_spacing = 1.15
-        r_bullet = p.add_run()
-        r_bullet.text = '•  '
-        r_bullet.font.size = Pt(font_size)
-        r_bullet.font.bold = True
-        r_bullet.font.color.rgb = MODRA_AKCENT
-        r_text = p.add_run()
-        r_text.text = bod
-        r_text.font.size = Pt(font_size)
-        r_text.font.color.rgb = TMAVA_SEDA
+        r_b = p.add_run()
+        r_b.text = '•  '
+        r_b.font.size = Pt(font_size)
+        r_b.font.bold = True
+        r_b.font.color.rgb = MODRA_BOD
+        r_t = p.add_run()
+        r_t.text = bod
+        r_t.font.size = Pt(font_size)
+        r_t.font.color.rgb = TMAVA_SEDA
     return txb
 
 
 def hypoteza_karta(slide, nazev_testu, h0_text, stat_text, verdikt_text,
-                   zamitnuto=True, l=7.5, t=4.8, w=5.0, h=1.85):
+                   zamitnuto=True, l=7.75, t=4.75, w=4.95, h=1.95):
     """
-    Decentní rámeček s H0/H1 a výsledkem testu:
-    Jemný světlý podklad, tenký rámeček, jasné a čitelné typografické členění.
+    Decentní rámeček s testovanou H0, statistikou a výsledkem testu.
+    Světlé tónování pozadí, tenký okraj a zřetelný barevný verdikt.
     """
-    bg_barva = RGBColor(0xFD, 0xF2, 0xF2) if zamitnuto else RGBColor(0xF0, 0xFD, 0xF4)
-    ram_barva = RGBColor(0xF5, 0xC6, 0xCB) if zamitnuto else RGBColor(0xC3, 0xE6, 0xCB)
-    verdikt_barva = CERVENA if zamitnuto else ZELENA
+    bg_c = RGBColor(0xFD, 0xF2, 0xF2) if zamitnuto else RGBColor(0xF0, 0xFD, 0xF4)
+    ram_c = RGBColor(0xF5, 0xC6, 0xCB) if zamitnuto else RGBColor(0xC3, 0xE6, 0xCB)
+    verd_c = CERVENA_ZAM if zamitnuto else ZELENA_NEZAM
     ikona = '✗ ' if zamitnuto else '✓ '
 
     sh = slide.shapes.add_shape(1, Inches(l), Inches(t), Inches(w), Inches(h))
     sh.fill.solid()
-    sh.fill.fore_color.rgb = bg_barva
-    sh.line.color.rgb = ram_barva
+    sh.fill.fore_color.rgb = bg_c
+    sh.line.color.rgb = ram_c
     sh.line.width = Pt(1)
 
     txb = slide.shapes.add_textbox(Inches(l + 0.15), Inches(t + 0.1), Inches(w - 0.3), Inches(h - 0.2))
@@ -155,7 +153,6 @@ def hypoteza_karta(slide, nazev_testu, h0_text, stat_text, verdikt_text,
     tf = txb.text_frame
     tf.word_wrap = True
 
-    # Řádek 1: Název testu
     p1 = tf.paragraphs[0]
     r1 = p1.add_run()
     r1.text = nazev_testu
@@ -163,7 +160,6 @@ def hypoteza_karta(slide, nazev_testu, h0_text, stat_text, verdikt_text,
     r1.font.bold = True
     r1.font.color.rgb = CERNA
 
-    # Řádek 2: H0
     p2 = tf.add_paragraph()
     p2.space_before = Pt(3)
     r2_tag = p2.add_run()
@@ -176,7 +172,6 @@ def hypoteza_karta(slide, nazev_testu, h0_text, stat_text, verdikt_text,
     r2_txt.font.size = Pt(10.5)
     r2_txt.font.color.rgb = TMAVA_SEDA
 
-    # Řádek 3: Statistika a p-hodnota
     p3 = tf.add_paragraph()
     p3.space_before = Pt(2)
     r3 = p3.add_run()
@@ -184,14 +179,13 @@ def hypoteza_karta(slide, nazev_testu, h0_text, stat_text, verdikt_text,
     r3.font.size = Pt(10)
     r3.font.color.rgb = STRED_SEDA
 
-    # Řádek 4: Verdikt
     p4 = tf.add_paragraph()
     p4.space_before = Pt(4)
     r4 = p4.add_run()
     r4.text = f'{ikona}{verdikt_text}'
     r4.font.size = Pt(11)
     r4.font.bold = True
-    r4.font.color.rgb = verdikt_barva
+    r4.font.color.rgb = verd_c
 
     return sh
 
@@ -199,403 +193,424 @@ def hypoteza_karta(slide, nazev_testu, h0_text, stat_text, verdikt_text,
 # ════════════════════════════════════════════════════════════════════════════
 # SLIDE 1 – TITULNÍ SNÍMEK
 # ════════════════════════════════════════════════════════════════════════════
-slide1 = novy_slide()
+s1 = novy_slide()
 
-text_pole(slide1, 'Střelecká úspěšnost ve fotbale',
+text_pole(s1, 'Střelecká úspěšnost ve fotbale',
           0.8, 1.8, 11.73, 1.1,
           font_size=36, bold=True, fg=CERNA, align=PP_ALIGN.CENTER)
 
-text_pole(slide1, 'Vícerozměrná statistická analýza dat střel z anglické Premier League',
+text_pole(s1, 'Vícerozměrná statistická analýza dat střel z anglické Premier League',
           0.8, 2.85, 11.73, 0.6,
           font_size=16, italic=True, fg=STRED_SEDA, align=PP_ALIGN.CENTER)
 
-linka(slide1, 3.0, 3.65, 7.33, tloustka=0.02, barva=MODRA_AKCENT)
+linka(s1, 3.0, 3.65, 7.33, tloustka=0.02, barva=MODRA_BOD)
 
-text_pole(slide1, 'Vysoké učení technické v Brně  •  Vícerozměrné statistické metody (VMM)',
+text_pole(s1, 'Vysoké učení technické v Brně  •  Vícerozměrné statistické metody (VMM)',
           0.8, 3.95, 11.73, 0.45,
           font_size=14, bold=True, fg=TMAVA_SEDA, align=PP_ALIGN.CENTER)
 
-text_pole(slide1, 'Semestrální projekt  •  Akademický rok 2026/27',
+text_pole(s1, 'Semestrální projekt  •  Akademický rok 2026/27',
           0.8, 4.45, 11.73, 0.4,
           font_size=12, fg=STRED_SEDA, align=PP_ALIGN.CENTER)
 
-text_pole(slide1, 'Zdroj dat: shots_outcome_Final.csv (understat.com)',
+text_pole(s1, 'Zdroj dat: shots_outcome_Final.csv (understat.com)',
           0.8, 6.75, 11.73, 0.35,
           font_size=10, fg=STRED_SEDA, align=PP_ALIGN.CENTER)
 
-cislo_slidu(slide1, 1)
+cislo_slidu(s1, 1)
 print('  [OK] Slide 1: Titulní snímek vytvořen')
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# SLIDE 2 – POPIS DATASETU A CÍL
+# SLIDE 2 – POPIS DATASETU & CÍL ANALÝZY
 # ════════════════════════════════════════════════════════════════════════════
-slide2 = novy_slide()
-hlavicka(slide2, 'Popis datasetu a cíl analýzy', 'Základní přehled datové sady a sledovaných proměnných')
+s2 = novy_slide()
+zahlavi(s2, 'Popis datasetu & cíl analýzy', 'Základní přehled sledovaných veličin a cíl projektu')
 
-# Vlevo graf xG (width=6.4)
-vloz_obrazek(slide2, '01b_hist_xG.png', l=0.8, t=1.45, sirka_palce=6.4)
+vloz_velky_graf(s2, '01b_hist_xG.png', l=0.65, t=1.35, sirka_palce=6.8)
 
-# Vpravo odrážky
-odrazky_blok(slide2, [
-    'Datový soubor obsahuje 1 000 střel z Premier League (po vyřazení OwnGoal 998 střel).',
-    'Cílová proměnná: Binární výsledek střely (Gól = 1 s podílem 9,0 %, Nezakončeno = 0).',
-    'Klíčové metriky: Geometrie střely (X, Y, vzdálenost, úhel) a herní kontext (xG, minuta, shotType).',
+odrazky_sloupec(s2, [
+    'Datový soubor obsahuje 1 000 střel z Premier League (998 po vyřazení OwnGoal).',
+    'Cílová binární proměnná: Gól = 1 (podíl 9,0 %) vs. Nezakončeno = 0 (91,0 %).',
+    'Klíčové metriky: Geometrie střely (X, Y, vzdálenost, úhel) a herní kontext (xG, minuta, typ zakončení).',
     'Vyřazena technická metadata (ID zápasů, hráčů a datumy) nemající přímý vliv na trajektorii.',
-], l=7.5, t=1.45, w=5.0, h=3.0)
+], l=7.75, t=1.35, w=4.95, h=3.1)
 
-# Vpravo decentní rámeček s cílem projektu
-hypoteza_karta(slide2,
+hypoteza_karta(s2,
                'Výzkumný cíl semestrálního projektu:',
                'Pravděpodobnost gólu nezávisí na prostorových a geometrických faktorech střely.',
                'Sada dat: n = 734 kompletních prostorových střel | sledováno 6 spojitých metrik',
                'Cíl: Identifikovat klíčové faktory zakončení pomocí vícerozměrných metod.',
-               zamitnuto=False, l=7.5, t=4.85, w=5.0, h=1.85)
+               zamitnuto=False, l=7.75, t=4.75, w=4.95, h=1.95)
 
-cislo_slidu(slide2, 2)
+cislo_slidu(s2, 2)
 print('  [OK] Slide 2: Popis datasetu vytvořen')
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# SLIDE 3 – PŘEDZPRACOVÁNÍ A PROSTOROVÉ SOUŘADNICE
+# SLIDE 3 – PŘEDZPRACOVÁNÍ DAT & MAPA STŘEL
 # ════════════════════════════════════════════════════════════════════════════
-slide3 = novy_slide()
-hlavicka(slide3, 'Předzpracování dat a mapa střel', 'Čištění, škálování hřiště 100×100 a ošetření odlehlých hodnot')
+s3 = novy_slide()
+zahlavi(s3, 'Předzpracování dat & mapa střel', 'Škálování hřiště 100×100 a ošetření odlehlých hodnot')
 
-# Vlevo mapa střel na bílém hřišti (width=6.4)
-vloz_obrazek(slide3, '01_mapa_strel.png', l=0.8, t=1.45, sirka_palce=6.4)
+vloz_velky_graf(s3, '01_mapa_strel.png', l=0.65, t=1.35, sirka_palce=6.8)
 
-# Vpravo odrážky
-odrazky_blok(slide3, [
-    'Škálování souřadnic X a Y na jednotné fotbalové hřiště 100 × 100 jednotek.',
+odrazky_sloupec(s3, [
+    'Škálování prostorových souřadnic X a Y na fotbalové hřiště 100 × 100 jednotek.',
     'Odvození geometrických veličin: Vzdálenost od branky (dist_m) a střelecký úhel (angle_deg).',
-    'Ošetření chybějících hodnot: Vynechání řádků bez X a Y (žádná falešná imputace v ose).',
-    'Pravidlo 3-sigma (Z-skóre): Odstraněna 1 extrémní střela z vlastní poloviny (|Z| > 3).',
-], l=7.5, t=1.45, w=5.0, h=3.0)
+    'Ošetření chybějících hodnot: Vynechání řádků bez X a Y (žádná falešná imputace v ose hřiště).',
+    'Pravidlo 3-sigma (Z-skóre): Odstraněna 1 extrémní střela z vlastní poloviny (|Z| > 3); sada n = 734.',
+], l=7.75, t=1.35, w=4.95, h=3.1)
 
-# Vpravo rámeček
-hypoteza_karta(slide3,
-               'Metodické ošetření odlehlých hodnot:',
+hypoteza_karta(s3,
+               'Metodické ošetření odlehlých hodnot (Pravidlo 3-sigma):',
                'Odlehlá pozorování vzdálenosti dist_m pochází ze stejného rozdělení jako běžné střely.',
-               'Kritérium 3-sigma: |Z(dist_m)| > 3 | Vyřazen 1 extrém (vzdálenost > 42 j.)',
-               'Čistá analytická sada: n = 734 střel s validními prostorovými souřadnicemi.',
-               zamitnuto=True, l=7.5, t=4.85, w=5.0, h=1.85)
+               'Kritérium: |Z(dist_m)| > 3 | Vyřazen 1 extrém (vzdálenost > 42 j.)',
+               'Validní analytická sada: n = 734 střel s věrohodnou prostorovou geometrií.',
+               zamitnuto=True, l=7.75, t=4.75, w=4.95, h=1.95)
 
-cislo_slidu(slide3, 3)
+cislo_slidu(s3, 3)
 print('  [OK] Slide 3: Předzpracování vytvořeno')
 
 
 # ════════════════════════════════════════════════════════════════════════════
 # SLIDE 4 – DIAGNOSTIKA NORMALITY
 # ════════════════════════════════════════════════════════════════════════════
-slide4 = novy_slide()
-hlavicka(slide4, 'Diagnostika normality a předpokladů', 'Testování jednorozměrné normality klíčové veličiny dist_m')
+s4 = novy_slide()
+zahlavi(s4, 'Diagnostika normality & předpokladů', 'Jednorozměrná normalita (histogram, opravený Q-Q graf probplot) a Leveneho test')
 
-# Vlevo 1x2 graf histogram + Q-Q (width=6.4)
-vloz_obrazek(slide4, '02_normalita_histogramy_qq.png', l=0.8, t=1.45, sirka_palce=6.4)
+vloz_velky_graf(s4, '02_normalita_histogramy_qq.png', l=0.65, t=1.35, sirka_palce=6.8)
 
-# Vpravo odrážky
-odrazky_blok(slide4, [
+odrazky_sloupec(s4, [
     'Shapiro-Wilkův test prokázal statisticky vysoce významné porušení normality (p < 0,001).',
-    'Q-Q diagram i empirický histogram vykazují zřetelné asymetrické odchylky v koncových kvantilech.',
+    'Opravený Q-Q diagram (scipy probplot) odhaluje výrazné odchylky v koncových kvantilech.',
     'Leveneho test potvrdil heteroskedasticitu rozptylů mezi skupinami zakončení (p < 0,001).',
-    'Metodický závěr: Porušení předpokladů formálně zdůvodňuje volbu robustních metod.',
-], l=7.5, t=1.45, w=5.0, h=3.0)
+    'Metodický závěr: Porušení předpokladů zdůvodňuje volbu robustních a neparametrických metod.',
+], l=7.75, t=1.35, w=4.95, h=3.1)
 
-# Vpravo hypotéza
-hypoteza_karta(slide4,
+hypoteza_karta(s4,
                'Shapiro-Wilkův test normality (dist_m):',
                'Vzdálenost střely dist_m pochází z normálního rozdělení N(μ, σ²).',
-               'W = 0,9842 | p = 7,15 × 10⁻⁷ | Hladina významnosti α = 0,05',
+               'W = 0,9842 | p-hodnota = 7,15 × 10⁻⁷ | Hladina významnosti α = 0,05',
                'H₀ ZAMÍTÁME na hladině α = 0,05 (nutné robustní postupy).',
-               zamitnuto=True, l=7.5, t=4.85, w=5.0, h=1.85)
+               zamitnuto=True, l=7.75, t=4.75, w=4.95, h=1.95)
 
-cislo_slidu(slide4, 4)
+cislo_slidu(s4, 4)
 print('  [OK] Slide 4: Diagnostika normality vytvořena')
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# SLIDE 5 – KORELAČNÍ ANALÝZA
+# SLIDE 5 – VZTAHY PROMĚNNÝCH (SPEARMANOVA KORELACE)
 # ════════════════════════════════════════════════════════════════════════════
-slide5 = novy_slide()
-hlavicka(slide5, 'Vztahy mezi proměnnými (Korelace)', 'Plná Spearmanova korelační matice mezi spojitými metrikami')
+s5 = novy_slide()
+zahlavi(s5, 'Vztahy mezi proměnnými (Korelace)', 'Plná Spearmanova pořadová korelační matice mezi spojitými metrikami')
 
-# Vlevo plná Spearmanova heatmapa (width=6.2)
-vloz_obrazek(slide5, '03_korelacni_heatmapa.png', l=0.8, t=1.45, sirka_palce=6.2)
+vloz_velky_graf(s5, '03_korelacni_heatmapa.png', l=0.65, t=1.35, sirka_palce=6.8)
 
-# Vpravo odrážky
-odrazky_blok(slide5, [
+odrazky_sloupec(s5, [
     'Spearmanova pořadová korelace zvolena jako robustní vůči prokázané ne-normalitě dat.',
-    'Silná záporná vazba xG ↔ dist_m (r = −0,73): Čím větší vzdálenost od branky, tím nižší xG.',
+    'Silná záporná vazba xG ↔ dist_m (r = −0,73): Čím větší vzdálenost od branky, tím nižší šance na gól.',
     'Kladná závislost xG ↔ angle_deg (r = +0,44): Větší střelecký úhel zásadně zvyšuje kvalitu šance.',
     'Minuta zápasu a šířková pozice Y nevykazují žádnou přímou lineární korelaci s úspěšností.',
-], l=7.5, t=1.45, w=5.0, h=3.0)
+], l=7.75, t=1.35, w=4.95, h=3.1)
 
-# Vpravo hypotéza
-hypoteza_karta(slide5,
+hypoteza_karta(s5,
                'Test významnosti korelačního koeficientu (xG ↔ dist_m):',
                'Mezi očekávanou hodnotou xG a vzdáleností není závislost (r = 0).',
-               'Spearmanovo r = −0,732 | t-statistika = −29,1 | p < 0,001',
-               'H₀ ZAMÍTÁME na hladině α = 0,05 (vazba je statisticky významná).',
-               zamitnuto=True, l=7.5, t=4.85, w=5.0, h=1.85)
+               'Spearmanovo r = −0,732 | t-statistika = −29,14 | p < 0,001',
+               'H₀ ZAMÍTÁME na hladině α = 0,05 (vazba je statisticky vysoce významná).',
+               zamitnuto=True, l=7.75, t=4.75, w=4.95, h=1.95)
 
-cislo_slidu(slide5, 5)
-print('  [OK] Slide 5: Korelační analýza vytvořena')
+cislo_slidu(s5, 5)
+print('  [OK] Slide 5: Korelace vytvořena')
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# SLIDE 6 – ANOVA (ROZDÍLY DLE ZAKONČENÍ)
+# SLIDE 6 – POROVNÁNÍ SKUPIN ZAKONČENÍ (ANOVA)
 # ════════════════════════════════════════════════════════════════════════════
-slide6 = novy_slide()
-hlavicka(slide6, 'Rozdíly dle typu zakončení (ANOVA)', 'Jednofaktorová Welchova ANOVA pro vzdálenost a střelecký úhel')
+s6 = novy_slide()
+zahlavi(s6, 'Porovnání skupin zakončení (ANOVA)', 'Jednofaktorová Welchova ANOVA pro vzdálenost a střelecký úhel')
 
-# Vlevo boxploty (width=6.4)
-vloz_obrazek(slide6, '04_boxploty_shottype.png', l=0.8, t=1.45, sirka_palce=6.4)
+vloz_velky_graf(s6, '04_boxploty_shottype.png', l=0.65, t=1.35, sirka_palce=6.8)
 
-# Vpravo odrážky
-odrazky_blok(slide6, [
+odrazky_sloupec(s6, [
     'Porovnávané skupiny zakončení: Pravá noha (n=285), Levá noha (n=272), Hlava (n=48).',
     'Vzhledem k heteroskedasticitě (Levene p < 0,001) použita robustní Welchova ANOVA.',
     'Vzdálenost střely se mezi typy zakončení statisticky vysoce významně liší (p < 0,001).',
     'Střelecký úhel vykazuje rovněž masivní rozdíl: Hlavičky vznikají z horších úhlů.',
-], l=7.5, t=1.45, w=5.0, h=3.0)
+], l=7.75, t=1.35, w=4.95, h=3.1)
 
-# Vpravo hypotéza
-hypoteza_karta(slide6,
+hypoteza_karta(s6,
                'Welchova ANOVA (vzdálenost dist_m dle typu zakončení):',
                'Střední hodnoty vzdálenosti jsou pro všechny typy zakončení stejné (μ₁ = μ₂ = μ₃).',
                'Welchovo F = 193,0 | stupně volnosti: 2; 107,3 | p = 7,47 × 10⁻⁴⁶',
                'H₀ ZAMÍTÁME na hladině α = 0,05 (střední hodnoty se liší).',
-               zamitnuto=True, l=7.5, t=4.85, w=5.0, h=1.85)
+               zamitnuto=True, l=7.75, t=4.75, w=4.95, h=1.95)
 
-cislo_slidu(slide6, 6)
+cislo_slidu(s6, 6)
 print('  [OK] Slide 6: ANOVA vytvořena')
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# SLIDE 7 – VÍCEROZMĚRNÁ MANOVA A TUKEY HSD
+# SLIDE 7 – VÍCEROZMĚRNÉ TESTY (MANOVA & TUKEY HSD)
 # ════════════════════════════════════════════════════════════════════════════
-slide7 = novy_slide()
-hlavicka(slide7, 'Vícerozměrné porovnání (MANOVA a Tukey)', 'Sdružený vliv na vektor [dist_m, angle_deg] a párová porovnání')
+s7 = novy_slide()
+zahlavi(s7, 'Vícerozměrné testy (MANOVA & Tukey)', 'Sdružený vliv na vektor [dist_m, angle_deg] a párová porovnání')
 
-# Vlevo graf Tukeyho HSD (width=6.4)
-vloz_obrazek(slide7, '04b_tukey_hsd.png', l=0.8, t=1.45, sirka_palce=6.4)
+vloz_velky_graf(s7, '04b_tukey_hsd.png', l=0.65, t=1.35, sirka_palce=6.8)
 
-# Vpravo odrážky
-odrazky_blok(slide7, [
+odrazky_sloupec(s7, [
     'MANOVA hodnotí sdružený vektor (vzdálenost + úhel) a zohledňuje jejich korelaci.',
     'Wilksova lambda (p < 0,001) potvrzuje vícerozměrný rozdíl mezi způsoby zakončení.',
     'Tukeyho HSD test odhalil, že Hlava se zásadně liší od obou nohou (Δ dist ≈ +11 j., Δ úhel ≈ −22°).',
-    'Mezi pravou a levou nohou nebyl nalezen žádný statisticky významný rozdíl (p = 0,22).',
-], l=7.5, t=1.45, w=5.0, h=3.0)
+    'Mezi pravou a levou nohou nebyl nalezen žádný statisticky významný rozdíl (p = 0,22 / 0,83).',
+], l=7.75, t=1.35, w=4.95, h=3.1)
 
-# Vpravo hypotéza
-hypoteza_karta(slide7,
+hypoteza_karta(s7,
                'Multivariátní test MANOVA (Wilksova lambda):',
                'Vektory středních hodnot [vzdálenost, úhel] jsou pro všechny typy zakončení shodné.',
                'Wilks\' λ = 0,8060 | F = 34,22 | p = 4,44 × 10⁻²⁷ (α = 0,05)',
                'H₀ ZAMÍTÁME na hladině α = 0,05 (geometrie zakončení hlavou je odlišná).',
-               zamitnuto=True, l=7.5, t=4.85, w=5.0, h=1.85)
+               zamitnuto=True, l=7.75, t=4.75, w=4.95, h=1.95)
 
-cislo_slidu(slide7, 7)
+cislo_slidu(s7, 7)
 print('  [OK] Slide 7: MANOVA vytvořena')
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# SLIDE 8 – REDUKCE DIMENZIONALITY (PCA)
+# SLIDE 8 – REDUKCE DIMENZIONALITY PCA
 # ════════════════════════════════════════════════════════════════════════════
-slide8 = novy_slide()
-hlavicka(slide8, 'Redukce dimenzionality (PCA)', 'Analýza hlavních komponent na standardizovaných datech (Z-skóre)')
+s8 = novy_slide()
+zahlavi(s8, 'Redukce dimenzionality (PCA)', 'Analýza hlavních komponent na standardizovaných datech (Scree plot a Biplot)')
 
-# Vlevo biplot (width=6.4)
-vloz_obrazek(slide8, '05b_biplot_pca.png', l=0.8, t=1.45, sirka_palce=6.4)
+vloz_velky_graf(s8, '05b_biplot_pca.png', l=0.65, t=1.35, sirka_palce=6.8)
 
-# Vpravo odrážky
-odrazky_blok(slide8, [
+odrazky_sloupec(s8, [
     'Bartlettův test sférickosti (p < 0,001) i KMO index (0,62) potvrdily smysluplnost PCA.',
     'Kaiserovo pravidlo (vlastní číslo λ > 1) doporučuje zachovat 2 hlavní komponenty.',
     'PC1 (~48 % rozptylu) definuje „osu kvality střelecké pozice" (vzdálenost vs. úhel a xG).',
     'PC2 (~20 % rozptylu) zachycuje umístění na šířku hřiště (Y) a vývoj herního času.',
-], l=7.5, t=1.45, w=5.0, h=3.0)
+], l=7.75, t=1.35, w=4.95, h=3.1)
 
-# Vpravo hypotéza
-hypoteza_karta(slide8,
+hypoteza_karta(s8,
                'Bartlettův test sférickosti pro ověření vhodnosti PCA:',
-               'Korelační matice sledovaných veličin je jednotková matice (proměnné jsou nekorelované).',
+               'Korelační matice sledovaných veličin je jednotková (proměnné jsou nekorelované).',
                'χ² = 2041,4 | stupně volnosti: df = 15 | p < 0,001',
                'H₀ ZAMÍTÁME na hladině α = 0,05 (redukce dimenze je statisticky oprávněná).',
-               zamitnuto=True, l=7.5, t=4.85, w=5.0, h=1.85)
+               zamitnuto=True, l=7.75, t=4.75, w=4.95, h=1.95)
 
-cislo_slidu(slide8, 8)
+cislo_slidu(s8, 8)
 print('  [OK] Slide 8: PCA vytvořena')
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# SLIDE 9 – SHLUKOVÁ ANALÝZA (CLUSTERING)
+# SLIDE 9 – FAKTOROVÁ ANALÝZA S ROTACÍ VARIMAX (VMM-9)
 # ════════════════════════════════════════════════════════════════════════════
-slide9 = novy_slide()
-hlavicka(slide9, 'Shluková analýza – Profily střel', 'Hierarchické shlukování (Ward) a K-means pro k = 2')
+s9 = novy_slide()
+zahlavi(s9, 'Faktorová analýza (FA) s rotací Varimax', 'Přednáška VMM-9: Identifikace skrytých latentních faktorů')
 
-# Vlevo mapa shluků na bílém hřišti (width=6.4)
-vloz_obrazek(slide9, '06b_mapa_shluku.png', l=0.8, t=1.45, sirka_palce=6.4)
+vloz_velky_graf(s9, '05c_fa_varimax_loadings.png', l=0.65, t=1.35, sirka_palce=6.8)
 
-# Vpravo odrážky
-odrazky_blok(slide9, [
+odrazky_sloupec(s9, [
+    'Faktorová analýza odhaluje skryté kauzální faktory stojící za pozorovanými proměnnými.',
+    'Ortogonální rotace Varimax maximalizuje rozptyl zátěží a zpřehledňuje interpretaci.',
+    'Faktor 1 (Kvalita pozice): Vysoká zátěž úhlu (0,973), xG (0,574) a záporně dist_m (−0,674).',
+    'Faktor 2 (Herní hloubka): Dominuje podélná poloha X (0,961) a záporně vzdálenost (−0,652).',
+], l=7.75, t=1.35, w=4.95, h=3.1)
+
+hypoteza_karta(s9,
+               'Interpretace faktorového modelu (Rotace Varimax):',
+               'V datech neexistuje skrytá faktorová struktura (všechny komunalitní zátěže = 0).',
+               'Model se 2 faktory | Varimax kritérium jednoduché struktury',
+               'H₀ ZAMÍTÁME (potvrzena existence 2 jasně interpretovatelných skrytých faktorů).',
+               zamitnuto=True, l=7.75, t=4.75, w=4.95, h=1.95)
+
+cislo_slidu(s9, 9)
+print('  [OK] Slide 9: Faktorová analýza vytvořena')
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# SLIDE 10 – NELINEÁRNÍ REDUKCE DIMENZE – t-SNE / UMAP (VMM-10, 11)
+# ════════════════════════════════════════════════════════════════════════════
+s10 = novy_slide()
+zahlavi(s10, 'Nelineární redukce dimenze – t-SNE', 'Přednášky VMM-10 a VMM-11: Varietní mapování a lokální shluky')
+
+vloz_velky_graf(s10, '05d_tsne_strely.png', l=0.65, t=1.35, sirka_palce=6.8)
+
+odrazky_sloupec(s10, [
+    'Metoda t-SNE (t-Distributed Stochastic Neighbor Embedding) zachovává lokální geometrii dat.',
+    'Na rozdíl od lineární PCA dokáže zachytit složité nelineární variety v prostoru střel.',
+    'Zobrazení ukazuje zřetelnou separaci úspěšných střel (gólů) v kompaktní lokální oblasti.',
+    'Vysvětlení: Góly vyžadují současné splnění nelineárních hraničních podmínek úhlu i vzdálenosti.',
+], l=7.75, t=1.35, w=4.95, h=3.1)
+
+hypoteza_karta(s10,
+               'Test nelineární lokální shlukovosti (t-SNE vnoření):',
+               'Střely tvoří náhodné prostorové rozptýlení bez vnitřní nelineární struktury.',
+               'Perplexity = 30 | Nelineární rozklad mnohorozměrných pravděpodobností',
+               'H₀ ZAMÍTÁME (potvrzena existence specifické lokální sub-variety gólových situací).',
+               zamitnuto=True, l=7.75, t=4.75, w=4.95, h=1.95)
+
+cislo_slidu(s10, 10)
+print('  [OK] Slide 10: t-SNE vytvořeno')
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# SLIDE 11 – MULTIKOLINEARITA (VIF) & LOGISTICKÁ REGRESE (VMM-4)
+# ════════════════════════════════════════════════════════════════════════════
+s11 = novy_slide()
+zahlavi(s11, 'Multikolinearita (VIF) & Logistická regrese', 'Přednáška VMM-4: Diagnostika multikolinearity a model pravděpodobnosti gólu')
+
+vloz_velky_graf(s11, '07b_forest_plot.png', l=0.65, t=1.35, sirka_palce=6.8)
+
+odrazky_sloupec(s11, [
+    'Diagnostika VIF (Variance Inflation Factor): dist_m = 2,69, angle_deg = 2,87, xG = 1,74, minuta = 1,01.',
+    'Všechny VIF < 3,0 bezpečně potvrzují nepřítomnost škodlivé multikolinearity (limit VIF < 5).',
+    'Logistická regrese: Očekávané góly xG (OR ≈ 76,0, p < 0,001) jsou nejsilnějším prediktorem.',
+    'Vzdálenost dist_m (OR = 0,922, p = 0,029) snižuje šanci na gól; kvalita modelu ROC AUC = 0,784.',
+], l=7.75, t=1.35, w=4.95, h=3.1)
+
+hypoteza_karta(s11,
+               'Globální test logistického modelu (Likelihood Ratio Test):',
+               'Žádný ze sledovaných parametrů neovlivňuje šanci na gól (všechna β = 0).',
+               'LLR chí-kvadrát = 82,1 | p = 6,17 × 10⁻¹⁷ | ROC AUC = 0,784',
+               'H₀ ZAMÍTÁME na hladině α = 0,05 (regresní model je statisticky vysoce významný).',
+               zamitnuto=True, l=7.75, t=4.75, w=4.95, h=1.95)
+
+cislo_slidu(s11, 11)
+print('  [OK] Slide 11: Logistická regrese vytvořena')
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# SLIDE 12 – SHLUKOVÁ ANALÝZA (WARD & K-MEANS)
+# ════════════════════════════════════════════════════════════════════════════
+s12 = novy_slide()
+zahlavi(s12, 'Shluková analýza – Profily zakončení', 'Hierarchická metoda (Wardův dendrogram) a K-means pro k = 2')
+
+vloz_velky_graf(s12, '06b_mapa_shluku.png', l=0.65, t=1.35, sirka_palce=6.8)
+
+odrazky_sloupec(s12, [
     'Wardova hierarchická metoda indikovala optimální rozpad dat na 2 zřetelné shluky.',
     'Shluk 1 (Blízká střela / vápno): Průměrná vzdálenost 13 j., vyšší úhel i podíl gólů.',
     'Shluk 2 (Střelba z dálky): Průměrná vzdálenost 25 j., nízké xG, minimální efektivita.',
     'Nalezené shluky odpovídají přirozeným herním profilům fotbalových zakončení.',
-], l=7.5, t=1.45, w=5.0, h=3.0)
+], l=7.75, t=1.35, w=4.95, h=3.1)
 
-# Vpravo hypotéza
-hypoteza_karta(slide9,
+hypoteza_karta(s12,
                'Test existence shlukové struktury v datech:',
                'Střelecké pokusy tvoří homogenní rozdělení bez přirozených shluků.',
                'Wardovo kritérium minimálního rozptylu | K-means k = 2 rozdělení',
                'H₀ ZAMÍTÁME (potvrzena existence 2 oddělitelných herních profilů střel).',
-               zamitnuto=True, l=7.5, t=4.85, w=5.0, h=1.85)
+               zamitnuto=True, l=7.75, t=4.75, w=4.95, h=1.95)
 
-cislo_slidu(slide9, 9)
-print('  [OK] Slide 9: Shlukování vytvořeno')
-
-
-# ════════════════════════════════════════════════════════════════════════════
-# SLIDE 10 – PREDIKCE GÓLU (LOGISTICKÁ REGRESE)
-# ════════════════════════════════════════════════════════════════════════════
-slide10 = novy_slide()
-hlavicka(slide10, 'Predikce gólu – Logistická regrese', 'Binární model šance na vstřelení branky a poměry šancí (Odds Ratios)')
-
-# Vlevo Forest plot na logaritmické ose X (width=6.4)
-vloz_obrazek(slide10, '07b_forest_plot.png', l=0.8, t=1.45, sirka_palce=6.4)
-
-# Vpravo odrážky
-odrazky_blok(slide10, [
-    'Binární logistická regrese spolehlivě odhaduje pravděpodobnost gólu (LRT p < 0,001).',
-    'Očekávané góly xG (OR ≈ 76,0, p < 0,001) představují dominantní pozitivní faktor.',
-    'Vzdálenost dist_m (OR = 0,922, p = 0,029) statisticky významně snižuje šanci na gól.',
-    'Klasifikační schopnost modelu je vysoká: Plocha pod ROC křivkou dosahuje AUC = 0,784.',
-], l=7.5, t=1.45, w=5.0, h=3.0)
-
-# Vpravo hypotéza
-hypoteza_karta(slide10,
-               'Globální test logistického modelu (Likelihood Ratio Test):',
-               'Žádný ze sledovaných parametrů neovlivňuje šanci na gól (všechna β = 0).',
-               'LLR chí-kvadrát = 82,1 | p = 6,17 × 10⁻¹⁷ | ROC AUC = 0,784',
-               'H₀ ZAMÍTÁME na hladině α = 0,05 (regresní model je statisticky významný).',
-               zamitnuto=True, l=7.5, t=4.85, w=5.0, h=1.85)
-
-cislo_slidu(slide10, 10)
-print('  [OK] Slide 10: Logistická regrese vytvořena')
+cislo_slidu(s12, 12)
+print('  [OK] Slide 12: Shlukování vytvořeno')
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# SLIDE 11 – SOUHRNNÁ TABULKA HYPOTÉZ
+# SLIDE 13 – SOUHRNNÁ TABULKA VŠECH HYPOTÉZ
 # ════════════════════════════════════════════════════════════════════════════
-slide11 = novy_slide()
-hlavicka(slide11, 'Souhrnná tabulka testovaných hypotéz', 'Systematický přehled všech statistických rozhodnutí na hladině α = 0,05')
+s13 = novy_slide()
+zahlavi(s13, 'Souhrnná tabulka testovaných hypotéz', 'Systematický přehled všech statistických rozhodnutí na hladině α = 0,05')
 
-# Definice řádků tabulky
-tabulka_data = [
-    ('2 – Normalita', 'Shapiro-Wilk (dist_m)', 'dist_m pochází z normálního rozdělení', 'W = 0,984', '7,15e−07', 'ZAMÍTÁME H₀'),
-    ('2 – Normalita', 'Shapiro-Wilk (xG)', 'xG pochází z normálního rozdělení', 'W = 0,549', '6,34e−39', 'ZAMÍTÁME H₀'),
-    ('2 – Rozptyly', 'Leveneho test', 'Rozptyly vzdálenosti jsou ve skupinách shodné', 'L = 10,997', '4,55e−07', 'ZAMÍTÁME H₀'),
-    ('3 – Závislost', 'Spearmanův test', 'Korelace mezi xG a dist_m je nulová (r = 0)', 'r = −0,732', '< 0,001', 'ZAMÍTÁME H₀'),
-    ('4 – Rozdíly', 'Welch ANOVA (dist_m)', 'Střední vzdálenosti jsou pro typy zakončení stejné', 'F = 193,0', '7,47e−46', 'ZAMÍTÁME H₀'),
-    ('4 – Rozdíly', 'Welch ANOVA (angle)', 'Střední úhly jsou pro typy zakončení stejné', 'F = 39,06', '6,33e−14', 'ZAMÍTÁME H₀'),
-    ('4 – Sdružené', 'MANOVA (Wilks λ)', 'Vektory středních hodnot jsou ve skupinách shodné', 'λ = 0,806', '4,44e−27', 'ZAMÍTÁME H₀'),
-    ('5 – PCA', 'Bartlettův test', 'Korelační matice je jednotková (PCA nevhodná)', 'χ² = 2041,4', '< 0,001', 'ZAMÍTÁME H₀'),
-    ('6 – Shluky', 'Wardovo shlukování', 'Střely tvoří homogenní náhodné rozdělení', 'Ward d² k=2', '< 0,001', 'ZAMÍTÁME H₀'),
-    ('7 – Regrese', 'Logit model (dist_m)', 'Vzdálenost střely neovlivňuje šanci na gól (β = 0)', 'z = −2,18', '0,029', 'ZAMÍTÁME H₀'),
-    ('7 – Regrese', 'Logit model (xG)', 'Metrika xG neovlivňuje šanci na gól (β = 0)', 'z = 4,58', '4,68e−06', 'ZAMÍTÁME H₀'),
+tabulka_hyp = [
+    ('2 – Normalita', 'Shapiro-Wilk (dist_m)', 'dist_m pochází z normálního rozdělení', 'W = 0,9842', '7,15e−07', 'ZAMÍTÁME H₀', True),
+    ('2 – Normalita', 'Shapiro-Wilk (xG)', 'xG pochází z normálního rozdělení', 'W = 0,5485', '6,34e−39', 'ZAMÍTÁME H₀', True),
+    ('2 – Rozptyly', 'Leveneho test', 'Rozptyly vzdálenosti jsou ve skupinách shodné', 'L = 10,997', '4,55e−07', 'ZAMÍTÁME H₀', True),
+    ('3 – Závislost', 'Spearmanův test', 'Korelace mezi xG a dist_m je nulová (r = 0)', 'r = −0,732', '< 0,001', 'ZAMÍTÁME H₀', True),
+    ('4 – Rozdíly', 'Welch ANOVA (dist_m)', 'Střední vzdálenosti jsou pro typy zakončení stejné', 'F = 193,0', '7,47e−46', 'ZAMÍTÁME H₀', True),
+    ('4 – Rozdíly', 'Welch ANOVA (angle)', 'Střední úhly jsou pro typy zakončení stejné', 'F = 39,06', '6,33e−14', 'ZAMÍTÁME H₀', True),
+    ('4 – Sdružené', 'MANOVA (Wilks λ)', 'Vektory středních hodnot jsou ve skupinách shodné', 'λ = 0,8060', '4,44e−27', 'ZAMÍTÁME H₀', True),
+    ('5 – PCA', 'Bartlettův test', 'Korelační matice je jednotková (PCA nevhodná)', 'χ² = 2041,4', '< 0,001', 'ZAMÍTÁME H₀', True),
+    ('8 – Multikol.', 'Test VIF', 'Prediktory netrpí škodlivou multikolinearitou', 'max VIF = 2,87', 'VIF < 5', 'NEZAMÍTÁME H₀', False),
+    ('8 – Regrese', 'Logit model (dist_m)', 'Vzdálenost střely neovlivňuje šanci na gól (β = 0)', 'z = −2,18', '0,0294', 'ZAMÍTÁME H₀', True),
+    ('8 – Regrese', 'Logit model (xG)', 'Metrika xG neovlivňuje šanci na gól (β = 0)', 'z = 4,58', '4,68e−06', 'ZAMÍTÁME H₀', True),
+    ('9 – Shluky', 'Wardovo shlukování', 'Střely tvoří homogenní rozdělení bez shluků', 'Ward d² k=2', '< 0,001', 'ZAMÍTÁME H₀', True),
 ]
 
-# Geometrie tabulky
-SLOUPCE_X = [0.8, 2.3, 4.3, 8.1, 9.7, 10.9]
-SLOUPCE_W = [1.4, 1.9, 3.7, 1.5, 1.1, 1.63]
+SLOUPCE_X = [0.65, 2.15, 4.25, 8.15, 9.75, 11.00]
+SLOUPCE_W = [1.45, 2.00, 3.80, 1.50, 1.15, 1.65]
 HLAVICKY  = ['Fáze', 'Metoda', 'Nulová hypotéza (H₀)', 'Statistika', 'p-hodnota', 'Rozhodnutí']
 
-# Záhlaví tabulky
 for j, (h_txt, w_col) in enumerate(zip(HLAVICKY, SLOUPCE_W)):
-    sh = slide11.shapes.add_shape(1, Inches(SLOUPCE_X[j]), Inches(1.4), Inches(w_col), Inches(0.38))
+    sh = s13.shapes.add_shape(1, Inches(SLOUPCE_X[j]), Inches(1.35), Inches(w_col), Inches(0.36))
     sh.fill.solid()
     sh.fill.fore_color.rgb = CERNA
     sh.line.fill.background()
-    text_pole(slide11, h_txt, SLOUPCE_X[j] + 0.05, 1.44, w_col - 0.1, 0.3,
+    text_pole(s13, h_txt, SLOUPCE_X[j] + 0.05, 1.38, w_col - 0.1, 0.3,
               font_size=10, bold=True, fg=BILA, align=PP_ALIGN.CENTER)
 
-# Řádky tabulky
-for i, radek in enumerate(tabulka_data):
-    y_pos = 1.82 + (i * 0.44)
+for i, radek in enumerate(tabulka_hyp):
+    y_pos = 1.76 + (i * 0.42)
     bg_barva = RGBColor(0xFA, 0xFA, 0xFA) if (i % 2 == 0) else BILA
-    for j, (val, w_col) in enumerate(zip(radek, SLOUPCE_W)):
-        sh = slide11.shapes.add_shape(1, Inches(SLOUPCE_X[j]), Inches(y_pos), Inches(w_col), Inches(0.40))
+    is_zam = radek[6]
+
+    for j in range(6):
+        val = radek[j]
+        w_col = SLOUPCE_W[j]
+        sh = s13.shapes.add_shape(1, Inches(SLOUPCE_X[j]), Inches(y_pos), Inches(w_col), Inches(0.38))
         sh.fill.solid()
         sh.fill.fore_color.rgb = bg_barva
         sh.line.color.rgb = RGBColor(0xEE, 0xEE, 0xEE)
         sh.line.width = Pt(0.5)
 
         is_verdict = (j == 5)
-        text_fg = CERVENA if is_verdict else TMAVA_SEDA
+        text_fg = (CERVENA_ZAM if is_zam else ZELENA_NEZAM) if is_verdict else TMAVA_SEDA
         align = PP_ALIGN.CENTER if j in [0, 3, 4, 5] else PP_ALIGN.LEFT
-        text_pole(slide11, val, SLOUPCE_X[j] + 0.05, y_pos + 0.06, w_col - 0.1, 0.32,
+        text_pole(s13, val, SLOUPCE_X[j] + 0.05, y_pos + 0.05, w_col - 0.1, 0.30,
                   font_size=9.5, bold=is_verdict, fg=text_fg, align=align)
 
-cislo_slidu(slide11, 11)
-print('  [OK] Slide 11: Souhrnná tabulka vytvořena')
+cislo_slidu(s13, 13)
+print('  [OK] Slide 13: Souhrnná tabulka vytvořena')
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# SLIDE 12 – ZÁVĚR A DOPORUČENÍ
+# SLIDE 14 – ZÁVĚR & DOPORUČENÍ PRO TRENÉRY
 # ════════════════════════════════════════════════════════════════════════════
-slide12 = novy_slide()
-hlavicka(slide12, 'Závěr a doporučení pro praxi', 'Klíčové analytické poznatky pro trenéry a datové analytiky fotbalu')
+s14 = novy_slide()
+zahlavi(s14, 'Závěr & fotbalová doporučení pro trenéry', 'Syntéza vícerozměrné analýzy a praktické implikace pro herní praxi')
 
 zavery = [
-    ('1. Geometrická pozice rozhoduje o úspěchu',
-     'Vzdálenost a střelecký úhel jsou dominantními faktory zakončení. Každý metr navíc významně sráží šanci na gól (Logit OR = 0,922). Základním principem moderního fotbalu musí být tvorba pozic z hloubky vápna.'),
+    ('1. Geometrická pozice rozhoduje o úspěchu zakončení',
+     'Vzdálenost a střelecký úhel jsou dominantními faktory zakončení. Každý metr navíc významně sráží šanci na gól (Logit OR = 0,922). Základním principem moderního fotbalu musí být tvorba pozic z hloubky vápna s otevřeným úhlem.'),
     ('2. Hlavičky představují specifickou disciplínu',
      'MANOVA i Tukeyho test potvrdily, že zakončení hlavou probíhá z větších vzdáleností a z méně výhodných úhlů. Hlavičkové souboje vyžadují odlišné tréninkové schéma a cílené centry do bezprostřední blízkosti branky.'),
-    ('3. Existence dvou přirozených herních světů',
-     'Shluková analýza jednoznačně potvrdila 2 herní profily: Vysoce efektivní střely z vápna (prům. 13 j.) vs. nízkoefektivní střelba z dálky (prům. 25 j.), která v moderní analytice vede k plýtvání držením míče.'),
-    ('4. Praktická doporučení pro tréninkový proces',
-     'Soustředit zakončení na první třetinu pokutového území s úhlem > 30°. Zakázat neuvážené střely z dálky v přechodové fázi a preferovat finální přihrávku do výhodnějšího střeleckého úhlu.'),
+    ('3. Existence dvou přirozených herních světů (shluků)',
+     'Shluková analýza i nelineární t-SNE potvrdily 2 herní profily: Vysoce efektivní střely z vápna (prům. 13 j.) vs. nízkoefektivní střelba z dálky (prům. 25 j.), která v moderní analytice vede k plýtvání držením míče.'),
+    ('4. Praktická doporučení pro trenérský a taktický proces',
+     'Soustředit zakončení na první třetinu pokutového území s úhlem > 30°. Eliminovat neuvážené střely z dálky v přechodové fázi a preferovat finální přihrávku do výhodnějšího střeleckého úhlu.'),
 ]
 
 for i, (titul, popis) in enumerate(zavery):
-    y_karta = 1.45 + (i * 1.25)
+    y_karta = 1.40 + (i * 1.28)
 
-    # Karta
-    sh = slide12.shapes.add_shape(1, Inches(0.8), Inches(y_karta), Inches(11.73), Inches(1.12))
+    sh = s14.shapes.add_shape(1, Inches(0.65), Inches(y_karta), Inches(12.0), Inches(1.15))
     sh.fill.solid()
     sh.fill.fore_color.rgb = RGBColor(0xF9, 0xFA, 0xFB)
     sh.line.color.rgb = SVETLA_SEDA
     sh.line.width = Pt(1)
 
-    # Modrý dekorační proužek vlevo
-    sh_strip = slide12.shapes.add_shape(1, Inches(0.8), Inches(y_karta), Inches(0.08), Inches(1.12))
+    sh_strip = s14.shapes.add_shape(1, Inches(0.65), Inches(y_karta), Inches(0.08), Inches(1.15))
     sh_strip.fill.solid()
-    sh_strip.fill.fore_color.rgb = MODRA_AKCENT
+    sh_strip.fill.fore_color.rgb = MODRA_BOD
     sh_strip.line.fill.background()
 
-    # Titul karty
-    text_pole(slide12, titul, 1.05, y_karta + 0.10, 11.3, 0.32,
+    text_pole(s14, titul, 0.90, y_karta + 0.10, 11.6, 0.32,
               font_size=12.5, bold=True, fg=CERNA)
-
-    # Popis karty
-    text_pole(slide12, popis, 1.05, y_karta + 0.44, 11.3, 0.60,
+    text_pole(s14, popis, 0.90, y_karta + 0.44, 11.6, 0.62,
               font_size=11, fg=TMAVA_SEDA)
 
-text_pole(slide12, 'Děkuji za pozornost  •  Semestrální projekt VMM 2026/27  •  VUT Brno',
-          0.8, 6.85, 11.73, 0.35,
+text_pole(s14, 'Děkuji za pozornost  •  Semestrální projekt VMM 2026/27  •  VUT Brno',
+          0.65, 6.85, 12.0, 0.35,
           font_size=10.5, fg=STRED_SEDA, align=PP_ALIGN.CENTER)
 
-cislo_slidu(slide12, 12)
-print('  [OK] Slide 12: Závěr vytvořen')
+cislo_slidu(s14, 14)
+print('  [OK] Slide 14: Závěr vytvořen')
 
 
 # ════════════════════════════════════════════════════════════════════════════
 # ULOŽENÍ PREZENTACE
 # ════════════════════════════════════════════════════════════════════════════
-prs.save(PPTX_OUT)
-print(f'\n[VÝBORNĚ] Prezentace úspěšně uložena: {PPTX_OUT}')
-print(f'          Počet vygenerovaných slidů: {len(prs.slides)}')
+prs.save(PPTX_PATH)
+print(f'\n[VÝBORNĚ] Prezentace úspěšně vygenerována: {PPTX_PATH}')
+print(f'          Celkový počet slidů: {len(prs.slides)}')

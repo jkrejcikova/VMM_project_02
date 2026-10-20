@@ -1,12 +1,13 @@
-Fáze,H0,Statistika,p-hodnota,Verdikt
-2 – Normalita (SW),xG pochází z norm. rozdělení,W=0.5485,6.34e-39,ZAMÍTÁME H0
-2 – Normalita (SW),dist_m pochází z norm. rozdělení,W=0.9842,7.15e-07,ZAMÍTÁME H0
-2 – Normalita (SW),angle_deg pochází z norm. rozdělení,W=0.7926,6.32e-29,ZAMÍTÁME H0
-2 – Shoda rozptylů,Rozptyly dist_m jsou ve skupinách shodné,L=10.997,4.55e-07,ZAMÍTÁME H0 (heteroskedasticita)
-3 – Korelace,Korelace xG ↔ dist_m = 0,r=-0.732,< 0.001,ZAMÍTÁME H0
-4 – ANOVA (dist_m),Střed. vzdálenosti jsou shodné pro Foot/Head,F=192.982,7.47e-46,ZAMÍTÁME H0
-4 – ANOVA (angle),Střed. úhly jsou shodné pro Foot/Head,F=39.062,6.33e-14,ZAMÍTÁME H0
-4 – MANOVA,Vektory středních hodnot jsou shodné,Wilks λ,4.44e-27,ZAMÍTÁME H0
-5 – Bartlettův test,Korel. matice je jednotková (PCA nevhodná),χ²=2041.4,0.00e+00,ZAMÍTÁME H0 (korelace existují → PCA vhodná)
-7 – Logistická regrese,dist_m neovlivňuje pravděpodobnost gólu,β=-0.0810,2.94e-02,ZAMÍTÁME H0
-7 – Logistická regrese,xG neovlivňuje pravděpodobnost gólu,β=4.3305,4.68e-06,ZAMÍTÁME H0
+Fáze,Metoda,Nulová hypotéza (H0),Statistika,p-hodnota,Rozhodnutí
+2 – Normalita,Shapiro-Wilk (dist_m),dist_m pochází z normálního rozdělení,W = 0.9836,2.57e-07,ZAMÍTÁME H0
+2 – Normalita,Shapiro-Wilk (xG),xG pochází z normálního rozdělení,W = 0.5433,7.78e-40,ZAMÍTÁME H0
+2 – Rozptyly,Leveneho test,Rozptyly vzdálenosti jsou ve skupinách shodné,L = 10.997,4.55e-07,ZAMÍTÁME H0
+3 – Závislost,Spearmanův test,Korelace mezi xG a dist_m je nulová (r = 0),r = -0.732,"< 0,001",ZAMÍTÁME H0
+4 – Rozdíly,Welch ANOVA (dist_m),Střední vzdálenosti jsou pro typy zakončení stejné,"F = 193,0","7,47e−46",ZAMÍTÁME H0
+4 – Rozdíly,Welch ANOVA (angle),Střední úhly jsou pro typy zakončení stejné,"F = 39,06","6,33e−14",ZAMÍTÁME H0
+4 – Sdružené,MANOVA (Wilks λ),Vektory středních hodnot jsou ve skupinách shodné,λ = 0.806,4.44e-27,ZAMÍTÁME H0
+5 – PCA,Bartlettův test,Korelační matice je jednotková (PCA nevhodná),χ² = 2041.4,"< 0,001",ZAMÍTÁME H0
+8 – Multikol.,Test VIF,Prediktory netrpí škodlivou multikolinearitou (VIF < 5),"max VIF = 2,87",VIF < 5,NEZAMÍTÁME H0
+8 – Regrese,Logit model (dist_m),Vzdálenost střely neovlivňuje šanci na gól (β = 0),"z = −2,18",0.0294,ZAMÍTÁME H0
+8 – Regrese,Logit model (xG),Metrika xG neovlivňuje šanci na gól (β = 0),"z = 4,58",4.68e-06,ZAMÍTÁME H0
+9 – Shluky,Wardovo shlukování,Střely tvoří homogenní rozdělení bez shluků,Ward d² k=2,"< 0,001",ZAMÍTÁME H0

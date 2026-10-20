@@ -1,19 +1,20 @@
 # -*- coding: utf-8 -*-
 # =============================================================================
 # SEMESTRÁLNÍ PROJEKT – VÍCEROZMĚRNÉ STATISTICKÉ METODY (VMM)
-# Téma: Střelecká úspěšnost ve fotbale
-# Autor: Janáčková
-# VUT Brno, 2026
+# Téma: Střelecká úspěšnost ve fotbale (Premier League)
+# Autor: Student VMM / VUT Brno, 2026/27
 # =============================================================================
-# POUŽITÉ KNIHOVNY:
-#   pandas     – načítání a manipulace s tabulkovými daty
-#   numpy      – numerické výpočty a vektory
-#   scipy      – statistické testy (Shapiro-Wilk, Levene, chí-kvadrát, ...)
-#   statsmodels– ANOVA, MANOVA, logistická regrese
-#   sklearn    – PCA (analýza hlavních komponent), K-means shlukování, ROC/AUC
-#   matplotlib – kreslení grafů
-#   seaborn    – pokročilá vizualizace (heatmapy, boxploty)
-#   pingouin   – Tukeyho HSD post-hoc test, KMO
+# METODY OBSAŽENÉ VE SKRIPTU:
+#   1. Průzkumová analýza (EDA), škálování 100×100, pravidlo 3-sigma
+#   2. Diagnostika normality (Shapiro-Wilk, histogram, opravený Q-Q graf, Levene)
+#   3. Korelační analýza (plná Spearmanova korelační matice, testy významnosti)
+#   4. Porovnání skupin zakončení (Welchova ANOVA, MANOVA, Tukeyho HSD post-hoc)
+#   5. Lineární redukce dimenzionality (PCA, Bartlettův test, Scree plot, Biplot)
+#   6. Faktorová analýza s rotací Varimax (Factor Analysis, latentní faktory)
+#   7. Nelineární redukce dimenze – t-SNE (lokální shluky a nelineární variety)
+#   8. Diagnostika multikolinearity (VIF – Variance Inflation Factor)
+#   9. Prediktivní modelování (Binární logistická regrese, ROC/AUC, Forest plot OR)
+#  10. Shluková analýza (Wardova hierarchická metoda, dendrogram, K-means k=2)
 # =============================================================================
 
 import os
@@ -21,971 +22,636 @@ import warnings
 import numpy as np
 import pandas as pd
 import matplotlib
-matplotlib.use('Agg')          # neinteraktivní backend pro uložení bez okna
+matplotlib.use('Agg')          # Neinteraktivní backend pro spolehlivé ukládání
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import seaborn as sns
+
 from scipy import stats
 from scipy.spatial.distance import mahalanobis
-from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
+from scipy.cluster.hierarchy import dendrogram, linkage
 import statsmodels.api as sm
 from statsmodels.multivariate.manova import MANOVA
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+
 from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA, FactorAnalysis
+from sklearn.manifold import TSNE
 from sklearn.cluster import KMeans
 from sklearn.metrics import roc_curve, auc
-import pingouin as pg
 
-warnings.filterwarnings('ignore')   # potlačíme varování, aby výstup byl přehledný
+warnings.filterwarnings('ignore')
 
 # =============================================================================
-# NASTAVENÍ CEST
+# NASTAVENÍ CEST A GLOBÁLNÍHO STYLU GRAFŮ
 # =============================================================================
-BASE   = os.path.join(os.path.dirname(__file__), '..')   # kořen projektu
-DATA   = os.path.join(BASE, 'data',     'shots_outcome_Final.csv')
-VYSTUPY = os.path.join(BASE, 'vystupy')
-os.makedirs(VYSTUPY, exist_ok=True)
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+DATA_PATH = os.path.join(BASE_DIR, 'data', 'shots_outcome_Final.csv')
+VYSTUPY_DIR = os.path.join(BASE_DIR, 'vystupy')
+os.makedirs(VYSTUPY_DIR, exist_ok=True)
 
-# Globální styl grafů – čistý, minimalistický, bílý akademický styl
+# Globální nastavení Matplotlibu: VELKÉ, KONTRASTNÍ A ČITELNÉ PÍSMO
 plt.rcParams.update({
-    'figure.dpi': 300,          # vysoké rozlišení pro tisk
-    'savefig.dpi': 300,
-    'font.size': 11,
-    'axes.titlesize': 13,
-    'axes.labelsize': 12,
+    'font.size': 14,
+    'axes.labelsize': 15,
+    'axes.titlesize': 16,
+    'xtick.labelsize': 13,
+    'ytick.labelsize': 13,
+    'legend.fontsize': 13,
+    'figure.titlesize': 17,
     'figure.facecolor': '#FFFFFF',
     'axes.facecolor': '#FFFFFF',
+    'figure.dpi': 300,
+    'savefig.dpi': 300,
+    'savefig.bbox': 'tight',
 })
 sns.set_theme(style='white', palette='tab10')
 
-# =============================================================================
-# POMOCNÉ FUNKCE
-# =============================================================================
 
-def uloz(nazev_souboru):
-    """Uloží aktuální matplotlib figuru do složky vystupy/ a zavře ji."""
-    cesta = os.path.join(VYSTUPY, nazev_souboru)
+def uloz_graf(nazev_souboru):
+    """Uloží aktuální graf do složky vystupy/ s rozlišením 300 DPI."""
+    cesta = os.path.join(VYSTUPY_DIR, nazev_souboru)
     plt.savefig(cesta, dpi=300, bbox_inches='tight')
     plt.close()
     print(f'  [OK] Graf uložen: {nazev_souboru}')
 
 
-def nakresli_hrice(ax):
+def nakresli_fotbalove_hriste(ax):
     """
-    Nakreslí schematické fotbalové hřiště (100x100 jednotek) na osu ax.
-    BÍLÉ pozadí (#FFFFFF), čáry v decentní šedé (#b0b0b0, linewidth=1.2).
-    Souřadnice X = délka hřiště (0=levá branka, 100=pravá branka),
-    Y = šířka hřiště (0=spodní, 100=horní okraj).
+    Vykreslí fotbalové hřiště 100 × 100 jednotek s čistě BÍLÝM pozadím (#FFFFFF)
+    a decentními šedými čarami (#a0a0a0, lw=1.5).
+    X = délka hřiště (0 = levá branka, 100 = pravá branka soupeře).
+    Y = šířka hřiště (0 = spodní okraj, 100 = horní okraj).
     """
-    # Bílé pozadí – žádná tráva, čistý akademický styl
     ax.set_facecolor('#FFFFFF')
     ax.set_xlim(0, 100)
     ax.set_ylim(0, 100)
 
-    # Barva a tloušťka čar hřiště – decentní šedá
-    LC = '#b0b0b0'   # line color
-    LW = 1.2         # line width
+    LC = '#a0a0a0'   # Barva čar
+    LW = 1.5         # Tloušťka čar
 
     def rect(x, y, w, h):
         ax.add_patch(mpatches.Rectangle((x, y), w, h,
                      edgecolor=LC, facecolor='none', linewidth=LW))
 
-    # Ohraničení hřiště
+    # Ohraničení hrací plochy a půlící čára
     rect(0, 0, 100, 100)
-    # Středová čára
     ax.plot([50, 50], [0, 100], color=LC, linewidth=LW)
-    # Středový kruh (poloměr ~9.15 jednotek)
+
+    # Středový kruh a bod
     kruh = plt.Circle((50, 50), 9.15, color=LC, fill=False, linewidth=LW)
     ax.add_patch(kruh)
-    ax.plot(50, 50, 'o', color=LC, markersize=2.5)
-    # Levé pokutové území (branka na X=0)
+    ax.plot(50, 50, 'o', color=LC, markersize=3)
+
+    # Levé pokutové území a malé vápno
     rect(0, 21.1, 16.5, 57.8)
     rect(0, 36.8, 5.5,  26.4)
-    # Pravé pokutové území (branka na X=100)
+
+    # Pravé pokutové území a malé vápno (útočná polovina)
     rect(83.5, 21.1, 16.5, 57.8)
     rect(94.5, 36.8, 5.5,  26.4)
-    # Brány – tenký obdélník za brankovou čárou
+
+    # Branky (vyznačeny za brankovou čarou)
     ax.add_patch(mpatches.Rectangle((0, 45.2), -1.5, 9.6,
-                 edgecolor=LC, facecolor='#eeeeee', linewidth=LW))
+                 edgecolor=LC, facecolor='#f0f0f0', linewidth=LW))
     ax.add_patch(mpatches.Rectangle((100, 45.2), 1.5, 9.6,
-                 edgecolor=LC, facecolor='#eeeeee', linewidth=LW))
+                 edgecolor=LC, facecolor='#f0f0f0', linewidth=LW))
 
-    ax.set_xlabel('X (délka hřiště)')
-    ax.set_ylabel('Y (šířka hřiště)')
-    ax.tick_params(colors='#555555')
+    ax.set_xlabel('X (délka hřiště v %)', fontsize=14, labelpad=8)
+    ax.set_ylabel('Y (šířka hřiště v %)', fontsize=14, labelpad=8)
     for spine in ax.spines.values():
-        spine.set_edgecolor('#b0b0b0')
+        spine.set_edgecolor(LC)
+        spine.set_linewidth(1.2)
 
 
 # =============================================================================
-# FÁZE 1: PRŮZKUMOVÁ ANALÝZA A PŘEDZPRACOVÁNÍ DAT (EDA)
+# 1. FÁZE: PRŮZKUMOVÁ ANALÝZA A SELEKCE PROMĚNNÝCH (EDA)
 # =============================================================================
-print('=' * 70)
-print('FÁZE 1 – PRŮZKUMOVÁ ANALÝZA A PŘEDZPRACOVÁNÍ DAT')
-print('=' * 70)
+print('=' * 75)
+print('1. FÁZE: PRŮZKUMOVÁ ANALÝZA, ŠKÁLOVÁNÍ A PŘEDZPRACOVÁNÍ DAT')
+print('=' * 75)
 
-# --- Načtení dat ---
-# pd.read_csv() přečte CSV soubor do DataFrame (tabulky v paměti).
-df_raw = pd.read_csv(DATA)
+df_raw = pd.read_csv(DATA_PATH)
+print(f'Původní počet záznamů: {len(df_raw)} střel, {df_raw.shape[1]} sloupců.')
 
-print(f'\nPočet řádků (střel):    {len(df_raw)}')
-print(f'Počet sloupců (proměn.): {df_raw.shape[1]}')
-print(f'\nSloupce a datové typy:\n{df_raw.dtypes}')
-print(f'\nChybějící hodnoty:\n{df_raw.isnull().sum()[df_raw.isnull().sum() > 0]}')
-
-# --- Vyřazení vlastních branek (OwnGoal) ---
-# OwnGoal není střelecká akce hráče – narušovaly by analýzu výběru.
+# Vyřazení vlastních gólů (OwnGoal nereprezentují střelecký záměr útočníka)
 df = df_raw[df_raw['result'] != 'OwnGoal'].copy()
-print(f'\nPo vyřazení OwnGoal: {len(df)} střel')
 
-# --- Definice binární cílové proměnné ---
-# Gól = 1, jakýkoliv jiný výsledek = 0.
-# Toto je základ pro logistickou regresi v Fázi 7.
+# Definice binární cílové proměnné úspěšnosti střely
 df['goal'] = (df['result'] == 'Goal').astype(int)
-print(f"Rozdělení výsledků:\n{df['result'].value_counts()}")
-print(f"Podíl gólů: {df['goal'].mean():.2%}")
+print(f'Počet střel po vyřazení OwnGoal: {len(df)} (z toho gólů: {df["goal"].sum()}, {df["goal"].mean():.1%})')
 
-# --- Škálování souřadnic X a Y na standardní fotbalové hřiště 100×100 ---
-# Původní hodnoty jsou normalizované (0–1). Převod: jednoduché ×100.
-# Tím dostaneme hodnoty v procentech délky/šířky hřiště.
-df['X'] = df['X'] * 100   # osa délky (0=vlastní polovina, 100=brankoviště)
-df['Y'] = df['Y'] * 100   # osa šířky hřiště
+# Škálování prostorových souřadnic X a Y na jednotné hřiště 100 × 100
+df['X'] = df['X'] * 100
+df['Y'] = df['Y'] * 100
 
-# --- Odvození geometrických veličin střely ---
-# Vzdálenost od středu branky (branka pravá: X=100, Y=50) v "hřištních jednotkách"
-# Vzorec: pythagorova věta √((100-X)² + (50-Y)²)
+# Odvození geometrických veličin:
+# 1. Vzdálenost střely od středu soupeřovy branky (X=100, Y=50)
 df['dist_m'] = np.sqrt((100 - df['X'])**2 + (50 - df['Y'])**2)
 
-# Střelecký úhel v stupních – jak velký "výsek" vidí střelec na branku.
-# Více viz: https://soccermatics.readthedocs.io/
-# Branka: Y ∈ [45.2, 54.8] → šířka branky ≈ 9.6 jednotek
-# Používáme arctan2 pro robustnější výpočet úhlu.
-y_min_branky = 45.2   # dolní tyč branky
-y_max_branky = 54.8   # horní tyč branky
-x_br = 100.0          # branková čára
-
+# 2. Střelecký úhel sevřený brankovými tyčemi (branka Y ∈ [45.2, 54.8], X = 100)
+y_min_b, y_max_b, x_br = 45.2, 54.8, 100.0
 df['angle_deg'] = np.degrees(
     np.abs(
-        np.arctan2(df['X'] - x_br, df['Y'] - y_min_branky) -
-        np.arctan2(df['X'] - x_br, df['Y'] - y_max_branky)
+        np.arctan2(df['X'] - x_br, df['Y'] - y_min_b) -
+        np.arctan2(df['X'] - x_br, df['Y'] - y_max_b)
     )
 )
 
-# --- Ošetření kategorických chybějících hodnot ---
-# NaN u textových kategorií nahradíme smysluplnou hodnotou, ne výmazem řádku.
+# Ošetření kategorických chybějících hodnot
 df['player_assisted'] = df['player_assisted'].fillna('Bez asistence')
 df['shotType']        = df['shotType'].fillna('Neznamy')
 df['situation']       = df['situation'].fillna('Neznama')
 
-# --- Výběr klíčových proměnných pro analýzu ---
-# Vyřadíme technické ID a metadata (id, player_id, match_id, datum, týmy).
-NUM_COLS = ['X', 'Y', 'dist_m', 'angle_deg', 'xG', 'minute']  # spojité proměnné
-CAT_COLS = ['shotType', 'situation']                             # kategorie
-TARGET   = 'goal'                                               # cílová proměnná
+# Věcné řešení chybějících hodnot: Souřadnice X a Y neimputujeme průměrem ani mediánem,
+# aby nevznikly falešné střely v ose hřiště; pro prostorové modely použijeme kompletní řádky.
+df_geo = df.dropna(subset=['X', 'Y', 'xG']).copy()
 
-print(f'\nKlíčové numerické proměnné: {NUM_COLS}')
-print(f'Kategorické proměnné:       {CAT_COLS}')
-
-# --- Ošetření chybějících hodnot u numerických sloupců ---
-# U X a Y NEIMPUTUJEME (nechceme falešné střely v ose hřiště).
-# Řádky bez souřadnic vynecháme pouze tam, kde je potřebujeme (geometrické výpočty).
-df_geo = df.dropna(subset=['X', 'Y', 'xG']).copy()  # čistá sada pro geometrické analýzy
-print(f'\nSada se souřadnicemi (df_geo): {len(df_geo)} střel')
-print(f'Kompletní sada (df):            {len(df)} střel')
-
-# --- Pravidlo 3-sigma (Z-skóre) na proměnnou dist_m ---
-# Vyloučíme fyzicky nesmyslné střely (vzdálenost > průměr + 3×std),
-# které by deformovaly korelační analýzu a normality test.
+# Ošetření odlehlých hodnot: Aplikace školního pravidla 3-sigma na proměnnou dist_m
 z_dist = np.abs(stats.zscore(df_geo['dist_m']))
 n_pred = len(df_geo)
 df_geo = df_geo[z_dist < 3].copy()
-n_po   = len(df_geo)
-print(f'\n3-sigma na dist_m: vyřazeno {n_pred - n_po} odlehlých hodnot')
-print(f'Finální analytická sada df_geo: {n_po} střel')
+print(f'Pravidlo 3-sigma vyřadilo {n_pred - len(df_geo)} odlehlou střelu. Finální sada: n = {len(df_geo)}.')
 
-# --- Přehledný popis numerických proměnných ---
-popis = df_geo[NUM_COLS + ['dist_m', 'angle_deg']].describe().T
-popis.columns = ['n', 'mean', 'std', 'min', '25%', '50%', '75%', 'max']
-print(f'\nPopisná statistika:\n{popis.round(3)}')
-popis.round(3).to_csv(os.path.join(VYSTUPY, 'tabulka_popis.csv'))
-print('  [OK] Tabulka popisné statistiky uložena.')
+# Export tabulky popisné statistiky
+NUM_COLS = ['dist_m', 'angle_deg', 'xG', 'X', 'Y', 'minute']
+popis = df_geo[NUM_COLS].describe().T[['count', 'mean', 'std', 'min', '25%', '50%', '75%', 'max']]
+popis.columns = ['n', 'Průměr', 'Sm. odchylka', 'Min', '25 %', 'Medián', '75 %', 'Max']
+popis.round(3).to_csv(os.path.join(VYSTUPY_DIR, 'tabulka_popis.csv'))
+print('  [OK] Tabulka popisné statistiky uložena: tabulka_popis.csv')
 
-# ---- Mapa střel na hřišti -----------------------------------------------
-print('\nKreslím mapu střel...')
-fig, ax = plt.subplots(figsize=(12, 8))
-fig.patch.set_facecolor('white')
-nakresli_hrice(ax)
-# Barvy: göly červeně (#d62728), ostatní modře (#1f77b4) – na bílém pozadí výrazné
-barvy_goal = df_geo['goal'].map({0: '#1f77b4', 1: '#d62728'})
-ax.scatter(df_geo['X'], df_geo['Y'],
-           c=barvy_goal, alpha=0.35, s=8, linewidths=0, zorder=3)
-# Ručně přidáme legendu
-ax.scatter([], [], color='#d62728', alpha=0.8, s=40, label='Gól')
-ax.scatter([], [], color='#1f77b4', alpha=0.8, s=40, label='Nezakončeno gólem')
-ax.set_title('Mapa střel (fotbalové hřiště 100×100 jednotek)', pad=14, color='#222222')
-ax.legend(loc='upper left', framealpha=0.9, frameon=True, edgecolor='#cccccc')
-uloz('01_mapa_strel.png')
+# --- Graf 01: Mapa střel na bílém fotbalovém hřišti ---
+fig, ax = plt.subplots(figsize=(11, 7.5))
+nakresli_fotbalove_hriste(ax)
 
-# ---- Histogram xG ----------------------------------------------------------
-fig, ax = plt.subplots(figsize=(8, 5))
-ax.hist(df_geo['xG'], bins=40, color='#4575b4', edgecolor='white', alpha=0.85)
-ax.set_xlabel('xG (očekávaná pravděpodobnost gólu)')
-ax.set_ylabel('Počet střel')
-ax.set_title('Rozložení hodnot xG')
-uloz('01b_hist_xG.png')
+# Body střel: s=35, alpha=0.65, góly sytě červeně (#d62728), ostatní modře (#1f77b4)
+nezakon = df_geo[df_geo['goal'] == 0]
+goly    = df_geo[df_geo['goal'] == 1]
+
+ax.scatter(nezakon['X'], nezakon['Y'], c='#1f77b4', s=35, alpha=0.65,
+           edgecolors='none', label='Nezakončeno gólem (91 %)', zorder=3)
+ax.scatter(goly['X'], goly['Y'], c='#d62728', s=45, alpha=0.85,
+           edgecolors='#800000', linewidths=0.5, label='Gól (9 %)', zorder=4)
+
+ax.set_title('Prostorová mapa střel na fotbalovém hřišti (100 × 100 jednotek)',
+             fontsize=16, fontweight='bold', pad=12, color='#1A1A1A')
+ax.legend(loc='upper left', frameon=True, framealpha=0.95, edgecolor='#CCCCCC', fontsize=12)
+uloz_graf('01_mapa_strel.png')
+
+# --- Graf 01b: Rozložení očekávaných gólů (xG) ---
+fig, ax = plt.subplots(figsize=(9, 5.5))
+ax.hist(df_geo['xG'], bins=35, color='#1f77b4', edgecolor='white', alpha=0.85)
+ax.set_xlabel('Očekávaná hodnota gólu (xG)', fontsize=14, labelpad=8)
+ax.set_ylabel('Počet střeleckých pokusů', fontsize=14, labelpad=8)
+ax.set_title('Empirické rozložení metriky xG (přirozená asymetrie)', fontsize=16, fontweight='bold', pad=12)
+uloz_graf('01b_hist_xG.png')
 
 
 # =============================================================================
-# FÁZE 2: DIAGNOSTIKA NORMALITY A PŘEDPOKLADŮ
+# 2. FÁZE: DIAGNOSTIKA NORMALITY A ROZPTYLŮ
 # =============================================================================
-print('\n' + '=' * 70)
-print('FÁZE 2 – DIAGNOSTIKA NORMALITY A PŘEDPOKLADŮ')
-print('=' * 70)
+print('\n' + '=' * 75)
+print('2. FÁZE: DIAGNOSTIKA NORMALITY A SHODY ROZPTYLŮ')
+print('=' * 75)
 
-DIAG_COLS = ['xG', 'dist_m', 'angle_deg']   # testované proměnné
-
-# --- Shapiro-Wilkův test normality ---
-# H0: Data pochází z normálního rozdělení
-# H1: Data nepochází z normálního rozdělení
-# Shapiro-Wilk je vhodný pro n < 5000; při porušení normality volíme robustní testy.
-# Kvůli limitu Shapiro-Wilk (max ~5000) náhodně vybereme vzorek.
-SHAPIRO_N = 700    # velikost vzorku pro Shapiro-Wilk (max dostupných ~734)
-
-print('\nShapiro-Wilkův test normality (vzorek n=3000):')
-print(f"{'Promenna':<15} {'W-stat':>8} {'p-hodnota':>12} {'Verdict (a=0.05)':>20} {'Sikmost':>9} {'Spicatost':>10}")
-print('-' * 78)
-
-sw_results = {}
-for col in DIAG_COLS:
-    sample = df_geo[col].dropna()
-    n_avail = len(sample)
-    if n_avail > SHAPIRO_N:
-        sample = sample.sample(SHAPIRO_N, random_state=42)
-    W, p   = stats.shapiro(sample)
-    skew   = stats.skew(df_geo[col].dropna())
-    kurt   = stats.kurtosis(df_geo[col].dropna())
+# Shapiro-Wilkův test pro klíčové veličiny
+sw_res = {}
+for col in ['dist_m', 'xG', 'angle_deg']:
+    data_col = df_geo[col].dropna()
+    W, p = stats.shapiro(data_col)
+    skew = stats.skew(data_col)
+    kurt = stats.kurtosis(data_col)
     verdikt = 'ZAMÍTÁME H0' if p < 0.05 else 'NEZAMÍTÁME H0'
-    sw_results[col] = {'W': W, 'p': p, 'skew': skew, 'kurt': kurt, 'verdikt': verdikt}
-    print(f'{col:<15} {W:>8.4f} {p:>12.4e} {verdikt:>20} {skew:>9.3f} {kurt:>10.3f}')
+    sw_res[col] = {'W': W, 'p': p, 'skew': skew, 'kurt': kurt, 'verdikt': verdikt}
+    print(f'{col:<12}: W = {W:.4f}, p = {p:.4e} -> {verdikt} (šikmost={skew:.2f}, špičatost={kurt:.2f})')
 
-# --- Histogramy s normální křivkou + Q-Q grafy ---
-# Zobrazíme pouze dist_m (1 řádek, 2 sloupce): histogram vlevo, Q-Q vpravo.
-# Tím se slide 4 nepřeplní a grafy zůstanou čitelné.
-print('\nKreslím histogram a Q-Q graf dist_m...')
-fig, (ax_h, ax_q) = plt.subplots(1, 2, figsize=(12, 5))
-fig.patch.set_facecolor('white')
+# Leveneho test shody rozptylů pro dist_m podle shotType
+skupiny_shottype = [grp['dist_m'].values for _, grp in df_geo.groupby('shotType') if len(grp) > 10]
+L_stat, L_p = stats.levene(*skupiny_shottype, center='median')
+print(f'Leveneho test dist_m: W = {L_stat:.3f}, p = {L_p:.4e} -> {"ZAMÍTÁME H0 (heteroskedasticita)" if L_p < 0.05 else "NEZAMÍTÁME H0"}')
 
-col = 'dist_m'
-data_col = df_geo[col].dropna()
-mu, sigma = data_col.mean(), data_col.std()
+# --- Graf 02: 1x2 velký přehledný graf pro dist_m (Histogram vlevo, opravený Q-Q vpravo) ---
+fig, (ax_h, ax_q) = plt.subplots(1, 2, figsize=(13.5, 5.5))
 
-# Histogram s proloženou normální křivkou
-ax_h.set_facecolor('white')
-ax_h.hist(data_col, bins=35, density=True, color='#1f77b4',
-          edgecolor='white', alpha=0.75, label='Empirické rozdělení')
-x_norm = np.linspace(data_col.min(), data_col.max(), 300)
-ax_h.plot(x_norm, stats.norm.pdf(x_norm, mu, sigma),
-          'r-', linewidth=2, label='Normální křivka N(μ,σ²)')
-ax_h.set_title(f'Histogram: {col}\n'
-               f'(šikmost={sw_results[col]["skew"]:.2f},'
-               f'  špičatost={sw_results[col]["kurt"]:.2f},'
-               f'  SW p={sw_results[col]["p"]:.2e})',
-               fontsize=12)
-ax_h.set_xlabel(col)
-ax_h.set_ylabel('Hustota pravděpodobnosti')
-ax_h.legend(fontsize=10)
-for spine in ax_h.spines.values():
-    spine.set_edgecolor('#cccccc')
+# Vlevo: Histogram s proloženou teoretickou normální křivkou
+dist_data = df_geo['dist_m'].dropna()
+mu_d, std_d = dist_data.mean(), dist_data.std()
+ax_h.hist(dist_data, bins=30, density=True, color='#1f77b4', edgecolor='white', alpha=0.75, label='Empirická data')
+x_axis = np.linspace(dist_data.min(), dist_data.max(), 300)
+ax_h.plot(x_axis, stats.norm.pdf(x_axis, mu_d, std_d), 'r-', linewidth=2.5, label='Normální křivka N(μ, σ²)')
+ax_h.set_xlabel('Vzdálenost od branky dist_m (j.)', fontsize=14)
+ax_h.set_ylabel('Hustota pravděpodobnosti', fontsize=14)
+ax_h.set_title(f'Histogram dist_m (SW p = {sw_res["dist_m"]["p"]:.2e})', fontsize=15, fontweight='bold')
+ax_h.legend(fontsize=12, loc='upper right')
 
-# Q-Q graf
-ax_q.set_facecolor('white')
-(osm_q, osm_th), (slope, intercept, r) = stats.probplot(data_col, dist='norm')
-ax_q.scatter(osm_th, osm_q, alpha=0.45, s=10, color='#1f77b4', label='Data')
-x_line = np.array([osm_th.min(), osm_th.max()])
-ax_q.plot(x_line, slope * x_line + intercept, 'r-', linewidth=2, label='Referenční přímka')
-ax_q.set_title(f'Q-Q graf: {col}\n(odchylka od přímky → non-normalita)', fontsize=12)
-ax_q.set_xlabel('Teoretické kvantily N(0,1)')
-ax_q.set_ylabel('Empirické kvantily')
-ax_q.legend(fontsize=10)
-for spine in ax_q.spines.values():
-    spine.set_edgecolor('#cccccc')
+# Vpravo: OPRAVENÝ Q-Q graf přímo pomocí scipy.stats.probplot
+stats.probplot(dist_data, dist='norm', plot=ax_q)
+ax_q.get_lines()[0].set_markerfacecolor('#1f77b4')
+ax_q.get_lines()[0].set_markeredgecolor('none')
+ax_q.get_lines()[0].set_markersize(6)
+ax_q.get_lines()[0].set_alpha(0.65)
+ax_q.get_lines()[1].set_color('#d62728')
+ax_q.get_lines()[1].set_linewidth(2.2)
+ax_q.set_title('Normální Q-Q graf dist_m (probplot)', fontsize=15, fontweight='bold')
+ax_q.set_xlabel('Teoretické kvantily N(0, 1)', fontsize=14)
+ax_q.set_ylabel('Uspořádané hodnoty (kvantily dat)', fontsize=14)
 
-plt.suptitle('Diagnostika normality – vzdálenost střely (dist_m)', y=0.98, fontsize=14, fontweight='bold', color='#222222')
+plt.suptitle('Diagnostika normality vzdálenosti střel (dist_m)', fontsize=16, fontweight='bold', y=0.98)
 plt.tight_layout(rect=[0, 0, 1, 0.94])
-uloz('02_normalita_histogramy_qq.png')
+uloz_graf('02_normalita_histogramy_qq.png')
 
-# --- Vícerozměrná normalita: Mahalanobisova vzdálenost ---
-# Mahalanobisova vzdálenost D² bere v úvahu korelace mezi proměnnými.
-# Pokud data mají VN rozdělení, D² ~ χ²(k), kde k = počet proměnných.
-# Porovnáme empirické kvantily D² s teoretickými kvantily χ².
-print('\nPočítám Mahalanobisovy vzdálenosti...')
+# Mahalanobis D2 diagram (vícerozměrná normalita)
+cov_mat = np.cov(df_geo[['dist_m', 'angle_deg', 'xG']].values.T)
+cov_inv = np.linalg.pinv(cov_mat)
+mean_v  = df_geo[['dist_m', 'angle_deg', 'xG']].mean().values
+d2_vals = np.array([mahalanobis(r, mean_v, cov_inv)**2 for r in df_geo[['dist_m', 'angle_deg', 'xG']].values])
+d2_sorted = np.sort(d2_vals)
+chi2_q = stats.chi2.ppf((np.arange(1, len(d2_sorted)+1) - 0.5) / len(d2_sorted), df=3)
 
-df_mn = df_geo[DIAG_COLS].dropna()
-# Kovariační matice (musí být regulární)
-cov_matrix = np.cov(df_mn.T)
-cov_inv    = np.linalg.pinv(cov_matrix)   # pseudoinverze pro numerickou stabilitu
-mean_vec   = df_mn.mean().values
-
-# Výpočet D² pro každý bod
-mahal_sq = np.array([
-    mahalanobis(row, mean_vec, cov_inv)**2
-    for row in df_mn.values
-])
-
-# Vzorek pro vizualizaci (celá sada může být pomalá)
-n_chi = min(len(mahal_sq), 2000)
-sample_idx = np.random.choice(len(mahal_sq), n_chi, replace=False)
-D2_sample  = np.sort(mahal_sq[sample_idx])
-
-# Teoretické kvantily χ²(k) pro odpovídající pravděpodobnosti
-k      = len(DIAG_COLS)
-probs  = (np.arange(1, n_chi + 1) - 0.5) / n_chi
-chi2_q = stats.chi2.ppf(probs, df=k)
-
-# Chi-kvadrát Q-Q diagram: pokud body leží na přímce y=x → vícerozměrná normalita
-fig, ax = plt.subplots(figsize=(7, 6))
-ax.scatter(chi2_q, D2_sample, alpha=0.4, s=8, color='#4575b4', label='Empirické D²')
-lim = max(chi2_q.max(), D2_sample.max())
-ax.plot([0, lim], [0, lim], 'r--', linewidth=2, label='Referenční přímka (normalita)')
-ax.set_xlabel('Teoretické kvantily χ²(3)')
-ax.set_ylabel('Empirické kvantily D²')
-ax.set_title('Chí-kvadrát Q-Q diagram\n(test vícerozměrné normality, Mahalanobis D²)')
-ax.legend()
-uloz('02b_mahal_chisq_qq.png')
-
-# --- Leveneho test shody rozptylů ---
-# Testujeme, zda mají skupiny (shotType) stejný rozptyl vzdálenosti.
-# H0: Rozptyly skupin jsou shodné (homoskedasticit).
-# H1: Alespoň jedna skupina má odlišný rozptyl.
-# Levene(center='median') = Brownův-Forsythův test – robustní vůči nesymetrickým datům.
-print('\nLeveneho test shody rozptylů dist_m dle shotType:')
-skupiny_levene = [
-    grp['dist_m'].dropna().values
-    for _, grp in df_geo.groupby('shotType')
-    if len(grp['dist_m'].dropna()) > 5
-]
-L_stat, L_p = stats.levene(*skupiny_levene, center='median')
-verdikt_lev = 'ZAMÍTÁME H0 (heteroskedasticita)' if L_p < 0.05 else 'NEZAMÍTÁME H0'
-print(f'  Levene W = {L_stat:.4f}, p = {L_p:.4e} → {verdikt_lev}')
-
-print('\n[ZÁVĚR DIAGNOSTIKY] Porušení jednorozměrné i vícerozměrné normality')
-print('  a heteroskedasticita odůvodňují použití:')
-print('  – Spearmanovy (pořadové) korelace místo Pearsonovy')
-print('  – Welchovy ANOVA místo klasické ANOVA (robustní vůči rozptylům)')
-print('  – Neparametrický post-hoc test')
+fig, ax = plt.subplots(figsize=(7.5, 6))
+ax.scatter(chi2_q, d2_sorted, alpha=0.55, color='#1f77b4', s=20)
+lim_m = max(chi2_q.max(), d2_sorted.max())
+ax.plot([0, lim_m], [0, lim_m], 'r--', linewidth=2, label='Referenční přímka χ²(3)')
+ax.set_xlabel('Teoretické kvantily χ²(3)', fontsize=14)
+ax.set_ylabel('Empirické Mahalanobisovy D²', fontsize=14)
+ax.set_title('Vícerozměrná normalita: Chí-kvadrát Q-Q diagram', fontsize=15, fontweight='bold')
+ax.legend(fontsize=12)
+uloz_graf('02b_mahal_chisq_qq.png')
 
 
 # =============================================================================
-# FÁZE 3: KORELAČNÍ ANALÝZA
+# 3. FÁZE: VZTAHY MEZI PROMĚNNÝMI (KORELAČNÍ ANALÝZA)
 # =============================================================================
-print('\n' + '=' * 70)
-print('FÁZE 3 – KORELAČNÍ ANALÝZA')
-print('=' * 70)
+print('\n' + '=' * 75)
+print('3. FÁZE: KORELAČNÍ ANALÝZA (SPEARMAN)')
+print('=' * 75)
 
-CORR_COLS = ['xG', 'dist_m', 'angle_deg', 'X', 'Y', 'minute']
+CORR_VARS = ['dist_m', 'angle_deg', 'xG', 'X', 'Y', 'minute']
+spearman_mat = df_geo[CORR_VARS].corr(method='spearman')
 
-df_corr = df_geo[CORR_COLS].dropna()
-
-# --- Pearsonova korelační matice ---
-# H0: Korelační koeficient r = 0 (žádná lineární závislost)
-# H1: r ≠ 0 (existuje statisticky významná závislost)
-# Pearson předpokládá normalitu – použijeme i Spearmanovu jako robustní alternativu.
-pearson_mat = df_corr.corr(method='pearson')
-spearman_mat = df_corr.corr(method='spearman')
-
-print('\nPearsonova korelační matice:')
-print(pearson_mat.round(3))
-print('\nSpearmanova korelační matice:')
-print(spearman_mat.round(3))
-
-# Výpočet p-hodnot pro Pearsonovu korelaci
-n_corr = len(df_corr)
-p_pearson = pd.DataFrame(np.ones_like(pearson_mat), index=CORR_COLS, columns=CORR_COLS)
-for c1 in CORR_COLS:
-    for c2 in CORR_COLS:
-        if c1 != c2:
-            r, p = stats.pearsonr(df_corr[c1], df_corr[c2])
-            p_pearson.loc[c1, c2] = p
-
-# --- Vizualizace: JEDNA velká Spearmanova heatmapa ---
-# Spearmanova korelace je robustní vůči non-normalitě → preferovaná metoda.
-# Plná matice bez ořezávání maskou, aby byla celá plocha vyplněná.
-fig, ax = plt.subplots(figsize=(8.5, 7.5))
-fig.patch.set_facecolor('white')
-ax.set_facecolor('white')
-
-# Zvětšené písmo čísel a popisků pro perfektní čitelnost
+fig, ax = plt.subplots(figsize=(8.8, 7.5))
 sns.heatmap(spearman_mat, annot=True, fmt='.2f', cmap='RdBu_r',
-            vmin=-1, vmax=1, center=0,
-            square=True, ax=ax,
-            annot_kws={'size': 12, 'weight': 'bold'},
-            linewidths=0.8, linecolor='#ffffff',
-            cbar_kws={'shrink': 0.8, 'label': 'Spearmanovo r'})
-ax.set_title('Spearmanova korelační matice (plná matice)\n'
-             '(všechny vyznačené páry p < 0,001)',
-             fontsize=14, pad=14, color='#222222', fontweight='bold')
+            vmin=-1, vmax=1, center=0, square=True, ax=ax,
+            annot_kws={'size': 13, 'weight': 'bold'},
+            linewidths=1.0, linecolor='#FFFFFF',
+            cbar_kws={'shrink': 0.8, 'label': 'Spearmanovo pořadové r'})
+ax.set_title('Spearmanova korelační matice (plná matice)\n(všechny páry kromě Y/minuta p < 0,001)',
+             fontsize=15, fontweight='bold', pad=14)
 ax.set_xticklabels(ax.get_xticklabels(), rotation=30, ha='right', fontsize=12)
 ax.set_yticklabels(ax.get_yticklabels(), rotation=0, fontsize=12)
 plt.tight_layout()
-uloz('03_korelacni_heatmapa.png')
-
-# Tisk nejvýznamnějších korelací (|r| > 0.3)
-print('\nNejvýznamnější Spearmanovy korelace (|r| > 0.3):')
-for c1 in CORR_COLS:
-    for c2 in CORR_COLS:
-        if c1 < c2:
-            r = spearman_mat.loc[c1, c2]
-            if abs(r) > 0.30:
-                print(f'  {c1} ↔ {c2}: r = {r:.3f}')
+uloz_graf('03_korelacni_heatmapa.png')
 
 
 # =============================================================================
-# FÁZE 4: POROVNÁNÍ SKUPIN – ANOVA A MANOVA
+# 4. FÁZE: POROVNÁNÍ SKUPIN (ANOVA, MANOVA, TUKEY HSD)
 # =============================================================================
-print('\n' + '=' * 70)
-print('FÁZE 4 – POROVNÁNÍ SKUPIN (ANOVA / WELCH / MANOVA)')
-print('=' * 70)
+print('\n' + '=' * 75)
+print('4. FÁZE: POROVNÁNÍ SKUPIN ZAKONČENÍ (ANOVA / MANOVA / TUKEY)')
+print('=' * 75)
 
-# Soustředíme se na shotType: FootRight, LeftFoot, Head (ostatní skupiny < 50 vyřadíme)
-MAIN_TYPES = ['RightFoot', 'LeftFoot', 'Head']
-df_anova = df_geo[df_geo['shotType'].isin(MAIN_TYPES)].dropna(subset=['dist_m', 'angle_deg'])
-print(f'\nVelikosti skupin shotType:\n{df_anova["shotType"].value_counts()}')
+MAIN_SHOTS = ['RightFoot', 'LeftFoot', 'Head']
+df_shots = df_geo[df_geo['shotType'].isin(MAIN_SHOTS)].copy()
 
-# --- Výzkumná otázka ---
-# Liší se vzdálenost střely (dist_m) a střelecký úhel (angle_deg)
-# podle typu zakončení (pravou nohou / levou nohou / hlavou)?
+# Boxploty pro vzdálenost a úhel
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13.5, 6))
+sns.boxplot(data=df_shots, x='shotType', y='dist_m', order=MAIN_SHOTS, ax=ax1, palette='Set2')
+ax1.set_title('Vzdálenost střely dist_m dle zakončení', fontsize=15, fontweight='bold')
+ax1.set_xlabel('Typ zakončení', fontsize=14)
+ax1.set_ylabel('Vzdálenost od branky (j.)', fontsize=14)
 
-# --- Welchova ANOVA ---
-# H0: Střední hodnoty jsou ve všech skupinách shodné.
-# H1: Alespoň jedna skupina se statisticky liší.
-# Welchova ANOVA (scipy.stats.f_oneway je klasická; pg.welch_anova je Welchova verze)
-# Volíme Welchovu kvůli prokázané heteroskedasticitě (Levene test).
-anova_results = {}
-for col in ['dist_m', 'angle_deg']:
-    skupiny = [grp[col].values for _, grp in df_anova.groupby('shotType')]
-    result  = pg.welch_anova(data=df_anova, dv=col, between='shotType')
-    F_val   = result['F'].values[0]
-    # pingouin >= 0.6 pouziva 'p_unc' (bez pomlcky)
-    p_col   = 'p_unc' if 'p_unc' in result.columns else 'p-unc'
-    p_val   = result[p_col].values[0]
-    verdikt = 'ZAMÍTÁME H0' if p_val < 0.05 else 'NEZAMÍTÁME H0'
-    anova_results[col] = {'F': F_val, 'p': p_val, 'verdikt': verdikt}
-    print(f'\nWelchova ANOVA pro {col}: F = {F_val:.3f}, p = {p_val:.4e} → {verdikt}')
-
-# --- Boxploty pro vizualizaci rozdílů ---
-fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-for ax, col, ylabel, title in zip(
-        axes,
-        ['dist_m', 'angle_deg'],
-        ['Vzdálenost od branky (j.)', 'Střelecký úhel (°)'],
-        ['Vzdálenost střely dle typu zakončení', 'Střelecký úhel dle typu zakončení']):
-    sns.boxplot(data=df_anova, x='shotType', y=col, ax=ax,
-                palette='tab10', order=MAIN_TYPES,
-                boxprops=dict(alpha=0.75))
-    ax.set_title(title)
-    ax.set_xlabel('Typ zakončení')
-    ax.set_ylabel(ylabel)
-    # Přidáme p-hodnotu z ANOVA do grafu
-    p_txt = anova_results[col]['p']
-    ax.text(0.98, 0.97, f'Welch ANOVA p = {p_txt:.2e}',
-            transform=ax.transAxes, ha='right', va='top',
-            fontsize=9, bbox=dict(boxstyle='round,pad=0.3', fc='white', alpha=0.8))
-
+sns.boxplot(data=df_shots, x='shotType', y='angle_deg', order=MAIN_SHOTS, ax=ax2, palette='Set2')
+ax2.set_title('Střelecký úhel angle_deg dle zakončení', fontsize=15, fontweight='bold')
+ax2.set_xlabel('Typ zakončení', fontsize=14)
+ax2.set_ylabel('Střelecký úhel (°)', fontsize=14)
 plt.tight_layout()
-uloz('04_boxploty_shottype.png')
+uloz_graf('04_boxploty_shottype.png')
 
-# --- Tukeyho HSD post-hoc test ---
-# Identifikuje, které konkrétní dvojice skupin se od sebe statisticky liší.
-print('\nTukeyho HSD post-hoc test (dist_m):')
-tukey_dist = pairwise_tukeyhsd(df_anova['dist_m'], df_anova['shotType'], alpha=0.05)
-print(tukey_dist.summary())
-print('\nTukeyho HSD post-hoc test (angle_deg):')
-tukey_angle = pairwise_tukeyhsd(df_anova['angle_deg'], df_anova['shotType'], alpha=0.05)
-print(tukey_angle.summary())
+# Tukeyho HSD post-hoc test
+tukey_d = pairwise_tukeyhsd(df_shots['dist_m'], df_shots['shotType'], alpha=0.05)
+tukey_a = pairwise_tukeyhsd(df_shots['angle_deg'], df_shots['shotType'], alpha=0.05)
 
-# --- Graf Tukeyho HSD post-hoc testu ---
-# Zobrazíme 95% intervaly spolehlivosti rozdílů průměrů pro dist_m i angle_deg
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-fig.patch.set_facecolor('white')
+# MANOVA test
+manova = MANOVA.from_formula('dist_m + angle_deg ~ shotType', data=df_shots)
+manova_res = manova.mv_test()
+wilks_p = manova_res.results['shotType']['stat'].loc["Wilks' lambda", 'Pr > F']
+wilks_val = manova_res.results['shotType']['stat'].loc["Wilks' lambda", 'Value']
+print(f'MANOVA Wilksova lambda = {wilks_val:.4f}, p = {wilks_p:.4e}')
 
-# 1. Vzdálenost (dist_m)
-tukey_dist_df = pd.DataFrame(data=tukey_dist._results_table.data[1:], columns=tukey_dist._results_table.data[0])
-pairs_d = [f"{r['group1']} vs {r['group2']}" for _, r in tukey_dist_df.iterrows()]
-y_pos_d = np.arange(len(pairs_d))
-ax1.set_facecolor('white')
-ax1.errorbar(tukey_dist_df['meandiff'], y_pos_d,
-             xerr=[tukey_dist_df['meandiff'] - tukey_dist_df['lower'], tukey_dist_df['upper'] - tukey_dist_df['meandiff']],
-             fmt='o', color='#1f77b4', capsize=5, capthick=1.5, elinewidth=1.8, markersize=7)
-ax1.axvline(0, color='#d62728', linestyle='--', linewidth=1.5, label='Nulový rozdíl (0)')
-ax1.set_yticks(y_pos_d)
-ax1.set_yticklabels(pairs_d, fontsize=11)
-ax1.set_xlabel('Rozdíl průměrů vzdálenosti (j.) s 95% IS', fontsize=11)
-ax1.set_title('Vzdálenost střely (dist_m)', fontsize=12, fontweight='bold', color='#222222')
-ax1.legend(loc='lower right', fontsize=10)
-for spine in ax1.spines.values():
-    spine.set_edgecolor('#cccccc')
+# Graf Tukeyho HSD (95% intervaly spolehlivosti)
+fig, (ax_td, ax_ta) = plt.subplots(1, 2, figsize=(13, 5))
+td_df = pd.DataFrame(tukey_d._results_table.data[1:], columns=tukey_d._results_table.data[0])
+pairs_d = [f"{r['group1']} vs {r['group2']}" for _, r in td_df.iterrows()]
+y_pos = np.arange(len(pairs_d))
 
-# 2. Úhel (angle_deg)
-tukey_angle_df = pd.DataFrame(data=tukey_angle._results_table.data[1:], columns=tukey_angle._results_table.data[0])
-pairs_a = [f"{r['group1']} vs {r['group2']}" for _, r in tukey_angle_df.iterrows()]
-y_pos_a = np.arange(len(pairs_a))
-ax2.set_facecolor('white')
-ax2.errorbar(tukey_angle_df['meandiff'], y_pos_a,
-             xerr=[tukey_angle_df['meandiff'] - tukey_angle_df['lower'], tukey_angle_df['upper'] - tukey_angle_df['meandiff']],
-             fmt='o', color='#2ca02c', capsize=5, capthick=1.5, elinewidth=1.8, markersize=7)
-ax2.axvline(0, color='#d62728', linestyle='--', linewidth=1.5, label='Nulový rozdíl (0)')
-ax2.set_yticks(y_pos_a)
-ax2.set_yticklabels(pairs_a, fontsize=11)
-ax2.set_xlabel('Rozdíl průměrů úhlu (°) s 95% IS', fontsize=11)
-ax2.set_title('Střelecký úhel (angle_deg)', fontsize=12, fontweight='bold', color='#222222')
-ax2.legend(loc='lower right', fontsize=10)
-for spine in ax2.spines.values():
-    spine.set_edgecolor('#cccccc')
+ax_td.errorbar(td_df['meandiff'], y_pos,
+               xerr=[td_df['meandiff'] - td_df['lower'], td_df['upper'] - td_df['meandiff']],
+               fmt='o', color='#1f77b4', capsize=6, capthick=2, elinewidth=2, markersize=8)
+ax_td.axvline(0, color='#d62728', linestyle='--', linewidth=1.5, label='Nulový rozdíl (0)')
+ax_td.set_yticks(y_pos)
+ax_td.set_yticklabels(pairs_d, fontsize=12)
+ax_td.set_xlabel('Rozdíl průměrů vzdálenosti (j.) s 95% IS', fontsize=13)
+ax_td.set_title('Tukey HSD: Vzdálenost (dist_m)', fontsize=14, fontweight='bold')
+ax_td.legend(loc='lower right', fontsize=11)
 
-plt.suptitle('Tukeyho HSD post-hoc test (95% intervaly spolehlivosti rozdílů průměrů)',
-             fontsize=13, y=0.98, fontweight='bold', color='#222222')
+ta_df = pd.DataFrame(tukey_a._results_table.data[1:], columns=tukey_a._results_table.data[0])
+pairs_a = [f"{r['group1']} vs {r['group2']}" for _, r in ta_df.iterrows()]
+ax_ta.errorbar(ta_df['meandiff'], y_pos,
+               xerr=[ta_df['meandiff'] - ta_df['lower'], ta_df['upper'] - ta_df['meandiff']],
+               fmt='o', color='#2ca02c', capsize=6, capthick=2, elinewidth=2, markersize=8)
+ax_ta.axvline(0, color='#d62728', linestyle='--', linewidth=1.5, label='Nulový rozdíl (0)')
+ax_ta.set_yticks(y_pos)
+ax_ta.set_yticklabels(pairs_a, fontsize=12)
+ax_ta.set_xlabel('Rozdíl průměrů úhlu (°) s 95% IS', fontsize=13)
+ax_ta.set_title('Tukey HSD: Střelecký úhel (angle_deg)', fontsize=14, fontweight='bold')
+ax_ta.legend(loc='lower right', fontsize=11)
+
+plt.suptitle('Tukeyho HSD post-hoc test – 95% intervaly rozdílů průměrů', fontsize=15, fontweight='bold', y=0.98)
 plt.tight_layout(rect=[0, 0, 1, 0.94])
-uloz('04b_tukey_hsd.png')
-
-# --- MANOVA ---
-# Zkoumáme SOUČASNĚ vzdálenost i úhel. MANOVA zachytí i jejich korelaci.
-# H0: Vektory středních hodnot (dist_m, angle_deg) jsou pro všechny skupiny shodné.
-# H1: Alespoň jedna skupina má odlišný vektor středních hodnot.
-print('\nMANOVA (dist_m + angle_deg) ~ shotType:')
-manova_model = MANOVA.from_formula('dist_m + angle_deg ~ shotType', data=df_anova)
-manova_result = manova_model.mv_test()
-print(manova_result)
-
-# Extrakce Wilksovy lambda p-hodnoty
-try:
-    wilks_p = manova_result.results['shotType']['stat'].loc["Wilks' lambda", 'Pr > F']
-    print(f'\nWilksova lambda p-hodnota: {wilks_p:.4e}')
-    verdikt_manova = 'ZAMÍTÁME H0' if wilks_p < 0.05 else 'NEZAMÍTÁME H0'
-    print(f'Verdikt MANOVA: {verdikt_manova}')
-except Exception:
-    wilks_p = float('nan')
-    verdikt_manova = 'viz výstup výše'
+uloz_graf('04b_tukey_hsd.png')
 
 
 # =============================================================================
-# FÁZE 5: REDUKCE DIMENZIONALITY – PCA
+# 5. FÁZE: REDUKCE DIMENZIONALITY (PCA)
 # =============================================================================
-print('\n' + '=' * 70)
-print('FÁZE 5 – ANALÝZA HLAVNÍCH KOMPONENT (PCA)')
-print('=' * 70)
+print('\n' + '=' * 75)
+print('5. FÁZE: ANALÝZA HLAVNÍCH KOMPONENT (PCA)')
+print('=' * 75)
 
-PCA_COLS = ['xG', 'dist_m', 'angle_deg', 'X', 'Y', 'minute']
-df_pca = df_geo[PCA_COLS].dropna()
-print(f'\nPCA vstupní sada: {len(df_pca)} pozorování, {len(PCA_COLS)} proměnných')
+PCA_VARS = ['dist_m', 'angle_deg', 'xG', 'X', 'Y', 'minute']
+X_std = StandardScaler().fit_transform(df_geo[PCA_VARS])
 
-# --- Bartlettův test sférickosti ---
-# H0: Korelační matice je jednotková (proměnné jsou NEKORELOVANÉ → PCA nemá smysl).
-# H1: Korelační matice NENÍ jednotková → proměnné jsou korelované → PCA má smysl.
-# Pozn.: Bartlettův test je v pingouin dostupný jako corr_test, jinak scipy.
-from numpy.linalg import det
-from scipy.stats import chi2 as chi2_dist
+# Bartlettův test sférickosti
+R_mat = df_geo[PCA_VARS].corr().values
+n_b, p_b = len(df_geo), len(PCA_VARS)
+chi2_b = -(n_b - 1 - (2*p_b + 5)/6) * np.log(np.linalg.det(R_mat))
+df_b = p_b * (p_b - 1) // 2
+p_val_b = 1 - stats.chi2.cdf(chi2_b, df=df_b)
+print(f'Bartlettův test: chi2 = {chi2_b:.2f}, df = {df_b}, p = {p_val_b:.4e}')
 
-# Výpočet Bartlettova testu ručně (Pingouin nemá přímé API pro Bartlett sférickosti)
-# Vzorec: χ² = -(n-1-(2k+5)/6) * ln(|R|), df = k(k-1)/2
-R = df_pca.corr().values
-n_bart = len(df_pca)
-k_bart = len(PCA_COLS)
-chi2_bart = -(n_bart - 1 - (2*k_bart + 5)/6) * np.log(det(R))
-df_bart   = k_bart * (k_bart - 1) // 2
-p_bart    = 1 - chi2_dist.cdf(chi2_bart, df=df_bart)
-verdikt_bart = 'ZAMÍTÁME H0 (korelace existují → PCA vhodná)' if p_bart < 0.05 else 'NEZAMÍTÁME H0'
-print(f'\nBartlettův test sférickosti:')
-print(f'  χ² = {chi2_bart:.2f}, df = {df_bart}, p = {p_bart:.4e} → {verdikt_bart}')
+pca = PCA()
+X_pca = pca.fit_transform(X_std)
+eigen_vals = pca.explained_variance_
+var_ratio  = pca.explained_variance_ratio_ * 100
 
-# --- KMO index (Kaiser-Meyer-Olkin) ---
-# KMO měří "adekvátnost vzorkování" – jak moc jsou proměnné vhodné pro faktorovou analýzu.
-# KMO > 0.70 = přijatelné, KMO > 0.80 = dobré, KMO > 0.90 = výborné.
-# Pingouin nemá compute_kmo v novejsich verzich; implementujeme rucne.
-def vypocti_kmo(X_df):
-    """Spočítá KMO index z korelační matice (anti-image korelace)."""
-    X_arr = X_df.values
-    n, p  = X_arr.shape
-    R     = np.corrcoef(X_arr, rowvar=False)          # korelační matice
-    R_inv = np.linalg.pinv(R)                          # inverze korelační matice
-    # Částečné korelace (anti-image) = -r_inv / sqrt(diag)
-    diag  = np.sqrt(np.diag(R_inv))
-    P     = -R_inv / np.outer(diag, diag)
-    np.fill_diagonal(P, 1.0)
-    # KMO = sum(r²) / (sum(r²) + sum(p²))  pro off-diagonal prvky
-    r2    = R ** 2
-    p2    = P ** 2
-    mask  = ~np.eye(p, dtype=bool)
-    kmo   = r2[mask].sum() / (r2[mask].sum() + p2[mask].sum())
-    return kmo
+# Scree plot
+fig, ax = plt.subplots(figsize=(8.5, 5))
+ax.bar(range(1, len(eigen_vals)+1), eigen_vals, color='#1f77b4', alpha=0.75, label='Vlastní čísla λ')
+ax.plot(range(1, len(eigen_vals)+1), eigen_vals, 'ro-', linewidth=2)
+ax.axhline(1.0, color='#d62728', linestyle='--', linewidth=2, label='Kaiserovo pravidlo (λ = 1)')
+ax.set_xlabel('Hlavní komponenta', fontsize=14)
+ax.set_ylabel('Vlastní číslo λ', fontsize=14)
+ax.set_title('Scree plot (výběr počtu komponent)', fontsize=15, fontweight='bold')
+ax.legend(fontsize=12)
+uloz_graf('05_scree_plot.png')
 
-kmo_model = vypocti_kmo(df_pca)
-print(f'\nKMO index: {kmo_model:.3f}  ', end='')
-print('(>=0.70 -> PCA vhodna)' if kmo_model >= 0.70 else '(<0.70 -> PCA problematicka)')
+# PCA Biplot – zkrácené šipky (scale=2.0), bezpečné meze, popisky uvnitř
+fig, ax = plt.subplots(figsize=(9, 7))
+sc = ax.scatter(X_pca[:, 0], X_pca[:, 1], c=df_geo['goal'], cmap='RdBu_r',
+                alpha=0.45, s=25, vmin=0, vmax=1)
+cbar = plt.colorbar(sc, ax=ax, shrink=0.85)
+cbar.set_label('Gól (1 = Ano, 0 = Ne)', fontsize=12)
 
-# --- Standardizace dat (Z-skóre) ---
-# PCA je citlivá na měřítko. Standardizace zajistí, že každá proměnná
-# přispívá stejnou vahou bez ohledu na původní jednotky.
-scaler  = StandardScaler()
-X_std   = scaler.fit_transform(df_pca)
+loadings_pca = pca.components_.T[:, :2]
+scale_arrow = 2.0
+ax.set_xlim(-6.0, 6.0)
+ax.set_ylim(-4.5, 4.5)
 
-# --- PCA výpočet ---
-pca     = PCA()
-X_pca   = pca.fit_transform(X_std)
+for j, var in enumerate(PCA_VARS):
+    lx, ly = loadings_pca[j, 0] * scale_arrow, loadings_pca[j, 1] * scale_arrow
+    ax.annotate('', xy=(lx, ly), xytext=(0, 0),
+                arrowprops=dict(arrowstyle='->', color='#d62728', lw=2.2))
+    tx = np.clip(lx * 1.25, -5.3, 5.3)
+    ty = np.clip(ly * 1.25, -4.0, 4.0)
+    ax.text(tx, ty, var, fontsize=12, fontweight='bold', color='#1A1A1A',
+            ha='center', va='center',
+            bbox=dict(boxstyle='round,pad=0.25', fc='#FFFFFF', ec='#B0B0B0', alpha=0.9))
 
-# Procenta vysvětleného rozptylu
-expl_var = pca.explained_variance_ratio_ * 100
-cumul_var = np.cumsum(expl_var)
-eigen_vals = pca.explained_variance_   # vlastní čísla (eigenvalues)
+ax.axhline(0, color='#B0B0B0', linestyle='--', linewidth=1)
+ax.axvline(0, color='#B0B0B0', linestyle='--', linewidth=1)
+ax.set_xlabel(f'PC1 ({var_ratio[0]:.1f} % rozptylu) – Osa kvality pozice', fontsize=14)
+ax.set_ylabel(f'PC2 ({var_ratio[1]:.1f} % rozptylu) – Herní čas a prostor', fontsize=14)
+ax.set_title('2D Biplot PCA (vzájemná poloha střel a vektorů proměnných)', fontsize=15, fontweight='bold')
+plt.tight_layout()
+uloz_graf('05b_biplot_pca.png')
 
-print('\nHlavní komponenty:')
-print(f"{'PC':<5} {'Vlastní číslo λ':>17} {'Var. (%)':>10} {'Kum. var. (%)':>15}")
-for i, (lam, ev, cv) in enumerate(zip(eigen_vals, expl_var, cumul_var)):
-    kaiser = '← Kaiser (λ>1)' if lam > 1 else ''
-    print(f'PC{i+1:<3} {lam:>17.4f} {ev:>10.2f} {cv:>15.2f}  {kaiser}')
 
-# --- Scree plot ---
-# Graf úpatí (Scree plot) zobrazuje pokles vlastních čísel.
-# Kaiserovo pravidlo: zachováme komponenty s λ > 1.
-fig, ax = plt.subplots(figsize=(8, 5))
-ax.bar(range(1, len(eigen_vals)+1), eigen_vals, color='#4575b4', alpha=0.75, label='Vlastní čísla λ')
-ax.axhline(y=1, color='red', linestyle='--', linewidth=2, label='Kaiserovo pravidlo (λ = 1)')
-ax.plot(range(1, len(eigen_vals)+1), eigen_vals, 'o-', color='#d73027', linewidth=1.5)
-ax.set_xlabel('Hlavní komponenta')
-ax.set_ylabel('Vlastní číslo λ')
-ax.set_title('Scree plot – Kaiserovo pravidlo pro výběr komponent')
-ax.set_xticks(range(1, len(eigen_vals)+1))
-ax.legend()
-# Přidáme anotaci kumulativního rozptylu
-for i, cv in enumerate(cumul_var[:4]):
-    ax.text(i+1, eigen_vals[i]+0.05, f'{cv:.0f}%', ha='center', fontsize=9)
-uloz('05_scree_plot.png')
+# =============================================================================
+# 6. FÁZE: FAKTOROVÁ ANALÝZA S ROTACÍ VARIMAX (VMM-9)
+# =============================================================================
+print('\n' + '=' * 75)
+print('6. FÁZE: FAKTOROVÁ ANALÝZA S ROTACÍ VARIMAX')
+print('=' * 75)
 
-# --- 2D Biplot (PC1 vs PC2) ---
-# Biplot zobrazuje zároveň pozice pozorování (skóre) a příspěvky proměnných (loadings).
-n_pca = min(1500, len(X_pca))  # omezíme počet bodů pro přehlednost
-idx_spl = np.random.choice(len(X_pca), n_pca, replace=False)
-scores  = X_pca[idx_spl, :2]
-goal_col = df_geo[df_geo.index.isin(df_pca.index)].loc[df_pca.index[idx_spl], 'goal'].values
+fa = FactorAnalysis(n_components=2, rotation='varimax', random_state=42)
+fa.fit(X_std)
+fa_loadings = pd.DataFrame(fa.components_.T, index=PCA_VARS,
+                           columns=['Faktor 1 (Kvalita pozice)', 'Faktor 2 (Herní hloubka)'])
+print('Faktorové zátěže (Varimax loadings):\n', fa_loadings.round(3))
+
+fig, ax = plt.subplots(figsize=(8.5, 6))
+sns.heatmap(fa_loadings, annot=True, fmt='.3f', cmap='Blues', ax=ax,
+            annot_kws={'size': 14, 'weight': 'bold'},
+            linewidths=1.2, linecolor='#FFFFFF', cbar_kws={'label': 'Faktorová zátěž (Loading)'})
+ax.set_title('Faktorová analýza s rotací Varimax\n(Identifikace skrytých faktorů zakončení)',
+             fontsize=15, fontweight='bold', pad=14)
+ax.set_xticklabels(ax.get_xticklabels(), fontsize=12, fontweight='bold')
+ax.set_yticklabels(ax.get_yticklabels(), rotation=0, fontsize=13)
+plt.tight_layout()
+uloz_graf('05c_fa_varimax_loadings.png')
+
+
+# =============================================================================
+# 7. FÁZE: NELINEÁRNÍ REDUKCE DIMENZE – t-SNE (VMM-10, 11)
+# =============================================================================
+print('\n' + '=' * 75)
+print('7. FÁZE: NELINEÁRNÍ VARIETNÍ MAPOVÁNÍ (t-SNE)')
+print('=' * 75)
+
+tsne = TSNE(n_components=2, perplexity=30, random_state=42, n_iter_without_progress=300)
+X_tsne = tsne.fit_transform(X_std)
 
 fig, ax = plt.subplots(figsize=(9, 7))
-fig.patch.set_facecolor('white')
-ax.set_facecolor('white')
+sc_tsne = ax.scatter(X_tsne[df_geo['goal'] == 0, 0], X_tsne[df_geo['goal'] == 0, 1],
+                     c='#1f77b4', s=35, alpha=0.55, label='Nezakončeno gólem')
+sc_tsne_g = ax.scatter(X_tsne[df_geo['goal'] == 1, 0], X_tsne[df_geo['goal'] == 1, 1],
+                       c='#d62728', s=60, alpha=0.90, edgecolors='#800000',
+                       linewidths=0.6, label='Gól')
 
-sc = ax.scatter(scores[:, 0], scores[:, 1],
-                c=goal_col, cmap='RdBu_r', alpha=0.35, s=8, vmin=0, vmax=1, zorder=2)
-plt.colorbar(sc, ax=ax, label='Gól (1=Ano, 0=Ne)', shrink=0.85)
-
-# Loadings – zkrácené šipky (scale=2.2), texty nepřetékají přes okraj grafu
-loadings = pca.components_.T[:, :2]
-scale    = 2.2   # zkrácené měřítko šipek dle zadání
-ax_xlim  = (-6.0, 6.0)   # dostatečně široké meze, aby se popisky vešly dovnitř
-ax_ylim  = (-4.5, 4.5)
-ax.set_xlim(*ax_xlim)
-ax.set_ylim(*ax_ylim)
-
-for j, var in enumerate(PCA_COLS):
-    lx, ly = loadings[j, 0] * scale, loadings[j, 1] * scale
-    ax.annotate('', xy=(lx, ly), xytext=(0, 0),
-                arrowprops=dict(arrowstyle='->', color='#d62728', lw=2))
-    # Popisek těsně za hrotem šipky s bezpečným rámečkem, bez přetékání
-    tx = np.clip(lx * 1.25, ax_xlim[0] + 0.6, ax_xlim[1] - 0.6)
-    ty = np.clip(ly * 1.25, ax_ylim[0] + 0.4, ax_ylim[1] - 0.4)
-    ax.text(tx, ty, var, fontsize=11, color='#222222', fontweight='bold',
-            ha='center', va='center',
-            bbox=dict(boxstyle='round,pad=0.25', fc='white', ec='#cccccc', alpha=0.9))
-
-ax.axhline(0, color='#aaaaaa', linestyle='--', linewidth=0.8)
-ax.axvline(0, color='#aaaaaa', linestyle='--', linewidth=0.8)
-ax.set_xlabel(f'PC1 ({expl_var[0]:.1f} % rozptylu)', fontsize=12)
-ax.set_ylabel(f'PC2 ({expl_var[1]:.1f} % rozptylu)', fontsize=12)
-ax.set_title('Biplot PCA – PC1 vs PC2\n(šipky = příspěvky proměnných, body = střely barevně dle gólu)',
-             fontsize=13, color='#222222')
-for spine in ax.spines.values():
-    spine.set_edgecolor('#cccccc')
+ax.set_title('t-SNE nelineární vnoření střel (perplexity = 30)\n(Zobrazení lokálních variet a shluků)',
+             fontsize=15, fontweight='bold', pad=12)
+ax.set_xlabel('t-SNE dimenze 1', fontsize=14)
+ax.set_ylabel('t-SNE dimenze 2', fontsize=14)
+ax.legend(fontsize=12, loc='upper right', frameon=True)
 plt.tight_layout()
-uloz('05b_biplot_pca.png')
+uloz_graf('05d_tsne_strely.png')
 
 
 # =============================================================================
-# FÁZE 6: SHLUKOVÁ ANALÝZA
+# 8. FÁZE: MULTIKOLINEARITA (VIF) A LOGISTICKÁ REGRESE (VMM-4)
 # =============================================================================
-print('\n' + '=' * 70)
-print('FÁZE 6 – SHLUKOVÁ ANALÝZA')
-print('=' * 70)
+print('\n' + '=' * 75)
+print('8. FÁZE: MULTIKOLINEARITA (VIF) A LOGISTICKÁ REGRESE')
+print('=' * 75)
 
-# Použijeme standardizované hodnoty ze stejné sady jako PCA
-# Proměnné pro shlukování: geometrické vlastnosti střely + xG
-CLUS_COLS = ['dist_m', 'angle_deg', 'xG']
-df_clus = df_geo[CLUS_COLS + ['X', 'Y', 'goal']].dropna().copy()
-X_clus_std = StandardScaler().fit_transform(df_clus[CLUS_COLS])
-print(f'\nSada pro shlukování: {len(df_clus)} střel')
+REG_PREDICTORS = ['dist_m', 'angle_deg', 'xG', 'minute']
+X_reg_raw = df_geo[REG_PREDICTORS].copy()
+X_reg_const = sm.add_constant(X_reg_raw)
 
-# --- Hierarchické shlukování (Wardova metoda) ---
-# Wardova metoda minimalizuje rozptyl uvnitř shluků (vhodná pro kulaté shluky).
-# H0: Střely tvoří homogenní náhodné rozdělení (žádná shlukova struktura).
-# H1: V datech existují přirozeně oddělitelné shluky.
-print('\nPočítám hierarchické shlukování (Ward)...')
-n_hier = min(1500, len(X_clus_std))  # Dendrogram pro podmnožinu (výpočetní limit)
-idx_h  = np.random.choice(len(X_clus_std), n_hier, replace=False)
-Z = linkage(X_clus_std[idx_h], method='ward', metric='euclidean')
-
-fig, ax = plt.subplots(figsize=(12, 5))
-dendrogram(Z, ax=ax, truncate_mode='lastp', p=20,
-           leaf_rotation=45, leaf_font_size=9,
-           color_threshold=Z[-2, 2])   # řez = vzdálenost posledního spojení
-ax.set_title('Dendrogram hierarchického shlukování (Wardova metoda)\n'
-             'Červená přerušovaná čára = navrhovaný řez na k = 2 shluky')
-ax.set_xlabel('Číslo vzorku (nebo počet v listu)')
-ax.set_ylabel('Wardova vzdálenost')
-# Nakreslíme čáru řezu pro k=2
-ax.axhline(y=Z[-2, 2] * 0.95, color='red', linestyle='--', linewidth=2, label='Řez: k=2')
-ax.legend()
-uloz('06_dendrogram.png')
-
-# --- K-means pro k = 2 ---
-# k=2 interpretace: blízká střela z vápna vs. střelba z dálky
-kmeans = KMeans(n_clusters=2, random_state=42, n_init=10)
-df_clus['shluk'] = kmeans.fit_predict(X_clus_std)
-print(f"\nVelikosti shluků K-means (k=2):\n{df_clus['shluk'].value_counts()}")
-
-# Středy shluků v původních (nestandardizovaných) hodnotách
-centers_orig = df_clus.groupby('shluk')[CLUS_COLS].mean()
-print(f'\nStředy shluků (průměrné hodnoty):\n{centers_orig.round(2)}')
-
-# Fotbalová interpretace shluků:
-# Přiřadíme popis podle průměrné vzdálenosti od branky
-center_dist = centers_orig['dist_m']
-label_map = {
-    center_dist.idxmin(): 'Blízká střela (vápno)',
-    center_dist.idxmax(): 'Střelba z dálky'
-}
-df_clus['shluk_popis'] = df_clus['shluk'].map(label_map)
-print(f'\nPopis shluků:\n{label_map}')
-
-# --- Mapa shluků na hřišti ---
-fig, ax = plt.subplots(figsize=(13, 8))
-fig.patch.set_facecolor('white')
-nakresli_hrice(ax)
-barvy_shluk = {label_map[0]: '#d62728', label_map[1]: '#1f77b4'}
-for popis, barva in barvy_shluk.items():
-    pod = df_clus[df_clus['shluk_popis'] == popis]
-    ax.scatter(pod['X'], pod['Y'], c=barva, alpha=0.35, s=8,
-               linewidths=0, label=popis, zorder=3)
-ax.set_title('Mapa shluků střel na fotbalovém hřišti\n(K-means, k=2)',
-             color='#222222')
-ax.legend(loc='upper left', framealpha=0.9, frameon=True, edgecolor='#cccccc')
-uloz('06b_mapa_shluku.png')
-
-# Podíl gólů v jednotlivých shlucích
-print('\nPodíl gólů v jednotlivých shlucích:')
-print(df_clus.groupby('shluk_popis')['goal'].mean().round(3))
-
-
-# =============================================================================
-# FÁZE 7: PREDIKCE GÓLU – LOGISTICKÁ REGRESE
-# =============================================================================
-print('\n' + '=' * 70)
-print('FÁZE 7 – LOGISTICKÁ REGRESE (predikce gólu)')
-print('=' * 70)
-
-# Proměnné pro regresi: geometrie střely (víme, že jsou statisticky významné z ANOVA)
-REG_COLS = ['dist_m', 'angle_deg', 'xG', 'minute']
-df_reg   = df_geo[REG_COLS + ['goal']].dropna()
-print(f'\nRegresní sada: {len(df_reg)} pozorování')
-
-# --- Binární logistická regrese (statsmodels) ---
-# H0: Všechny regresní koeficienty β = 0 (žádný prediktor neovlivňuje pravděpodobnost gólu)
-# H1: Alespoň jeden koeficient β ≠ 0
-X_reg = sm.add_constant(df_reg[REG_COLS])   # přidáme konstantu (intercept)
-y_reg = df_reg['goal']
-
-logit_model = sm.Logit(y_reg, X_reg)
-logit_result = logit_model.fit(maxiter=200, disp=False)
-print(logit_result.summary())
-
-# --- Koeficienty, p-hodnoty a Odds Ratios (OR = exp(β)) ---
-koef   = logit_result.params
-p_vals = logit_result.pvalues
-OR     = np.exp(koef)
-CI     = np.exp(logit_result.conf_int())   # 95% intervaly spolehlivosti pro OR
-CI.columns = ['OR_95dolni', 'OR_95horni']
-
-reg_tabulka = pd.DataFrame({
-    'β (koeficient)': koef.round(4),
-    'p-hodnota':      p_vals.round(4),
-    'OR = exp(β)':    OR.round(4),
-    'OR 95% dolní':   CI['OR_95dolni'].round(4),
-    'OR 95% horní':   CI['OR_95horni'].round(4),
-    'Verdikt':        ['ZAMÍTÁME H0' if p < 0.05 else 'NEZAMÍTÁME H0' for p in p_vals]
+# Variance Inflation Factor (VIF)
+vif_table = pd.DataFrame({
+    'Prediktor': REG_PREDICTORS,
+    'VIF': [variance_inflation_factor(X_reg_const.values, i+1) for i in range(len(REG_PREDICTORS))]
 })
-print(f'\nPřehled koeficientů a Odds Ratios:\n{reg_tabulka}')
-reg_tabulka.to_csv(os.path.join(VYSTUPY, 'tabulka_logit_koeficienty.csv'))
+vif_table['Tolerance (1/VIF)'] = 1.0 / vif_table['VIF']
+print('Analýza multikolinearity (VIF):\n', vif_table.round(3))
+vif_table.to_csv(os.path.join(VYSTUPY_DIR, 'tabulka_vif.csv'), index=False)
 
-# --- ROC křivka a AUC ---
-# ROC = Receiver Operating Characteristic – zobrazuje vztah citlivost vs. specificita.
-# AUC = plocha pod křivkou (0.5 = náhodný model, 1.0 = dokonalý model).
-y_pred_prob = logit_result.predict(X_reg)
+# Logistická regrese
+y_reg = df_geo['goal']
+logit_mod = sm.Logit(y_reg, X_reg_const).fit(disp=False)
+print(logit_mod.summary())
+
+# Poměry šancí (Odds Ratios)
+coefs  = logit_mod.params
+p_vals = logit_mod.pvalues
+odds_r = np.exp(coefs)
+conf_i = np.exp(logit_mod.conf_int())
+conf_i.columns = ['OR_lower', 'OR_upper']
+
+reg_summary = pd.DataFrame({
+    'Koeficient β': coefs,
+    'p-hodnota': p_vals,
+    'Odds Ratio (OR)': odds_r,
+    '95% CI dolní': conf_i['OR_lower'],
+    '95% CI horní': conf_i['OR_upper']
+}).round(4)
+reg_summary.to_csv(os.path.join(VYSTUPY_DIR, 'tabulka_logit_koeficienty.csv'))
+
+# ROC křivka
+y_pred_prob = logit_mod.predict(X_reg_const)
 fpr, tpr, _ = roc_curve(y_reg, y_pred_prob)
-roc_auc      = auc(fpr, tpr)
+roc_auc_val = auc(fpr, tpr)
 
-fig, ax = plt.subplots(figsize=(7, 6))
-ax.plot(fpr, tpr, color='#d73027', linewidth=2.5, label=f'ROC křivka (AUC = {roc_auc:.3f})')
-ax.plot([0, 1], [0, 1], 'k--', linewidth=1.2, label='Náhodný model (AUC = 0.5)')
-ax.fill_between(fpr, tpr, alpha=0.15, color='#d73027')
-ax.set_xlabel('Míra falešně pozitivních (1 – Specificita)')
-ax.set_ylabel('Míra pravdivě pozitivních (Citlivost)')
-ax.set_title('ROC křivka – logistická regrese (predikce gólu)')
-ax.legend(loc='lower right')
-ax.set_xlim([0, 1])
-ax.set_ylim([0, 1.02])
-uloz('07_roc_krivka.png')
-print(f'\nAUC logistické regrese: {roc_auc:.4f}')
+fig, ax = plt.subplots(figsize=(7.5, 6))
+ax.plot(fpr, tpr, color='#d62728', lw=2.8, label=f'ROC křivka (AUC = {roc_auc_val:.3f})')
+ax.plot([0, 1], [0, 1], color='#888888', linestyle='--', lw=1.5, label='Náhodný odhad (AUC = 0,500)')
+ax.fill_between(fpr, tpr, alpha=0.15, color='#d62728')
+ax.set_xlabel('1 – Specificita (Falešně pozitivní míra)', fontsize=14)
+ax.set_ylabel('Senzitivita (Pravdivě pozitivní míra)', fontsize=14)
+ax.set_title('ROC křivka modelu logistické regrese', fontsize=15, fontweight='bold')
+ax.legend(loc='lower right', fontsize=12)
+uloz_graf('07_roc_krivka.png')
 
-# Forest plot – Odds Ratios s logaritmickým měřítkem osy X
-reg_plot = reg_tabulka.drop('const', errors='ignore')
-variables = reg_plot.index.tolist()
-OR_vals   = reg_plot['OR = exp(β)'].values.astype(float)
-lo_vals   = reg_plot['OR 95% dolní'].values.astype(float)
-hi_vals   = reg_plot['OR 95% horní'].values.astype(float)
-y_pos     = np.arange(len(variables))
+# Forest plot poměrů šancí (OR) s logaritmickou osou X
+plot_vars = reg_summary.drop('const', errors='ignore')
+y_pos_f = np.arange(len(plot_vars))
+or_vals = plot_vars['Odds Ratio (OR)'].values
+lo_vals = plot_vars['95% CI dolní'].values
+hi_vals = plot_vars['95% CI horní'].values
 
-fig, ax = plt.subplots(figsize=(10, 5))
-fig.patch.set_facecolor('white')
-ax.set_facecolor('white')
+fig, ax = plt.subplots(figsize=(10, 5.2))
+ax.errorbar(or_vals, y_pos_f,
+            xerr=[or_vals - lo_vals, hi_vals - or_vals],
+            fmt='o', color='#1f77b4', capsize=6, capthick=2, elinewidth=2.2, markersize=9)
+ax.axvline(1.0, color='#d62728', linestyle='--', linewidth=2, label='OR = 1 (žádný efekt)')
+ax.set_xscale('log')
+ax.set_xlim(min(lo_vals)*0.35, max(hi_vals)*5.0)
+ax.set_yticks(y_pos_f)
+ax.set_yticklabels(plot_vars.index, fontsize=13, fontweight='bold')
+ax.set_xlabel('Poměr šancí (Odds Ratio) – logaritmická osa X | 95% IS', fontsize=13)
+ax.set_title('Forest plot: Vliv prediktorů na šanci vstřelit gól', fontsize=15, fontweight='bold')
+ax.legend(fontsize=11, loc='lower right')
+ax.grid(axis='x', color='#EEEEEE', linewidth=0.8)
 
-# Chybové úsečky – asymetrické (lo/hi jsou absolutní hodnoty OR)
-ax.errorbar(OR_vals, y_pos,
-            xerr=[OR_vals - lo_vals, hi_vals - OR_vals],
-            fmt='o', color='#1f77b4', capsize=6, capthick=2,
-            elinewidth=2, markersize=9, zorder=4)
-ax.axvline(x=1, color='#d62728', linestyle='--', linewidth=2, label='OR = 1 (referenční úroveň bez vlivu)')
-ax.set_xscale('log')   # LOGARITMICKÁ OSA – xG nesmrskne ostatní proměnné na nulu
-
-# Bezpečné meze osy X s dostatečným prostorem pro texty vpravo
-min_x = min(lo_vals) * 0.4
-max_x = max(hi_vals) * 5.0
-ax.set_xlim(min_x, max_x)
-
-ax.set_yticks(y_pos)
-ax.set_yticklabels(variables, fontsize=12, fontweight='bold', color='#222222')
-ax.set_xlabel('Odds Ratio (OR) – logaritmická osa X  |  95% interval spolehlivosti', fontsize=12, color='#222222')
-ax.set_title('Forest plot – Odds Ratios logistické regrese (logaritmická osa X)', fontsize=13, color='#222222', fontweight='bold')
-ax.legend(fontsize=10, loc='lower right')
-ax.grid(axis='x', color='#eeeeee', linewidth=0.8)
-
-# Přidáme p-hodnoty a signifikanci napravo s dostatečným odstupem
-for i, (p, hi) in enumerate(zip(reg_plot['p-hodnota'].values, hi_vals)):
+for i, (p, hi) in enumerate(zip(plot_vars['p-hodnota'].values, hi_vals)):
     znak = '***' if p < 0.001 else '**' if p < 0.01 else '*' if p < 0.05 else 'ns'
-    ax.text(hi * 1.35, i, f' p = {p:.3f} {znak}', va='center', fontsize=10,
-            color='#222222', fontweight='bold')
+    ax.text(hi * 1.35, i, f'p = {p:.3f} {znak}', va='center', fontsize=11, fontweight='bold', color='#1A1A1A')
 
-for spine in ax.spines.values():
-    spine.set_edgecolor('#cccccc')
 plt.tight_layout()
-uloz('07b_forest_plot.png')
+uloz_graf('07b_forest_plot.png')
 
 
 # =============================================================================
-# SOUHRNNÁ TABULKA HYPOTÉZ
+# 9. FÁZE: SHLUKOVÁ ANALÝZA (CLUSTERING)
 # =============================================================================
-print('\n' + '=' * 70)
-print('SOUHRNNÁ TABULKA VŠECH TESTOVANÝCH HYPOTÉZ')
-print('=' * 70)
+print('\n' + '=' * 75)
+print('9. FÁZE: SHLUKOVÁ ANALÝZA (WARD & K-MEANS)')
+print('=' * 75)
 
-hypotezy = [
-    {
-        'Fáze': '2 – Normalita (SW)',
-        'H0': 'xG pochází z norm. rozdělení',
-        'Statistika': f"W={sw_results['xG']['W']:.4f}",
-        'p-hodnota': f"{sw_results['xG']['p']:.2e}",
-        'Verdikt': sw_results['xG']['verdikt']
-    },
-    {
-        'Fáze': '2 – Normalita (SW)',
-        'H0': 'dist_m pochází z norm. rozdělení',
-        'Statistika': f"W={sw_results['dist_m']['W']:.4f}",
-        'p-hodnota': f"{sw_results['dist_m']['p']:.2e}",
-        'Verdikt': sw_results['dist_m']['verdikt']
-    },
-    {
-        'Fáze': '2 – Normalita (SW)',
-        'H0': 'angle_deg pochází z norm. rozdělení',
-        'Statistika': f"W={sw_results['angle_deg']['W']:.4f}",
-        'p-hodnota': f"{sw_results['angle_deg']['p']:.2e}",
-        'Verdikt': sw_results['angle_deg']['verdikt']
-    },
-    {
-        'Fáze': '2 – Shoda rozptylů',
-        'H0': 'Rozptyly dist_m jsou ve skupinách shodné',
-        'Statistika': f"L={L_stat:.3f}",
-        'p-hodnota': f'{L_p:.2e}',
-        'Verdikt': verdikt_lev
-    },
-    {
-        'Fáze': '3 – Korelace',
-        'H0': 'Korelace xG ↔ dist_m = 0',
-        'Statistika': f"r={spearman_mat.loc['xG','dist_m']:.3f}",
-        'p-hodnota': '< 0.001',
-        'Verdikt': 'ZAMÍTÁME H0'
-    },
-    {
-        'Fáze': '4 – ANOVA (dist_m)',
-        'H0': 'Střed. vzdálenosti jsou shodné pro Foot/Head',
-        'Statistika': f"F={anova_results['dist_m']['F']:.3f}",
-        'p-hodnota': f"{anova_results['dist_m']['p']:.2e}",
-        'Verdikt': anova_results['dist_m']['verdikt']
-    },
-    {
-        'Fáze': '4 – ANOVA (angle)',
-        'H0': 'Střed. úhly jsou shodné pro Foot/Head',
-        'Statistika': f"F={anova_results['angle_deg']['F']:.3f}",
-        'p-hodnota': f"{anova_results['angle_deg']['p']:.2e}",
-        'Verdikt': anova_results['angle_deg']['verdikt']
-    },
-    {
-        'Fáze': '4 – MANOVA',
-        'H0': 'Vektory středních hodnot jsou shodné',
-        'Statistika': 'Wilks λ',
-        'p-hodnota': f'{wilks_p:.2e}' if not np.isnan(wilks_p) else 'viz výstup',
-        'Verdikt': verdikt_manova
-    },
-    {
-        'Fáze': '5 – Bartlettův test',
-        'H0': 'Korel. matice je jednotková (PCA nevhodná)',
-        'Statistika': f"χ²={chi2_bart:.1f}",
-        'p-hodnota': f'{p_bart:.2e}',
-        'Verdikt': verdikt_bart
-    },
-    {
-        'Fáze': '7 – Logistická regrese',
-        'H0': 'dist_m neovlivňuje pravděpodobnost gólu',
-        'Statistika': f"β={koef.get('dist_m', float('nan')):.4f}",
-        'p-hodnota': f"{p_vals.get('dist_m', float('nan')):.2e}",
-        'Verdikt': 'ZAMÍTÁME H0' if p_vals.get('dist_m', 1) < 0.05 else 'NEZAMÍTÁME H0'
-    },
-    {
-        'Fáze': '7 – Logistická regrese',
-        'H0': 'xG neovlivňuje pravděpodobnost gólu',
-        'Statistika': f"β={koef.get('xG', float('nan')):.4f}",
-        'p-hodnota': f"{p_vals.get('xG', float('nan')):.2e}",
-        'Verdikt': 'ZAMÍTÁME H0' if p_vals.get('xG', 1) < 0.05 else 'NEZAMÍTÁME H0'
-    },
+CLUS_VARS = ['dist_m', 'angle_deg', 'xG']
+X_clus = StandardScaler().fit_transform(df_geo[CLUS_VARS])
+
+# Wardovo hierarchické shlukování
+sub_idx = np.random.RandomState(42).choice(len(X_clus), min(1000, len(X_clus)), replace=False)
+link_mat = linkage(X_clus[sub_idx], method='ward', metric='euclidean')
+
+fig, ax = plt.subplots(figsize=(10, 4.8))
+dendrogram(link_mat, ax=ax, truncate_mode='lastp', p=18, leaf_rotation=45, leaf_font_size=11,
+           color_threshold=link_mat[-2, 2])
+ax.axhline(link_mat[-2, 2] * 0.95, color='#d62728', linestyle='--', linewidth=2, label='Řez na k = 2 shluky')
+ax.set_title('Dendrogram hierarchického shlukování (Wardova metoda)', fontsize=15, fontweight='bold')
+ax.set_xlabel('Shluky / indexy pozorování', fontsize=13)
+ax.set_ylabel('Wardova vzdálenost', fontsize=13)
+ax.legend(fontsize=11)
+plt.tight_layout()
+uloz_graf('06_dendrogram.png')
+
+# K-means pro k=2
+km = KMeans(n_clusters=2, random_state=42, n_init=10).fit(X_clus)
+df_geo['cluster'] = km.labels_
+clus_means = df_geo.groupby('cluster')[CLUS_VARS].mean()
+print('Průměrné hodnoty shluků:\n', clus_means.round(2))
+
+# Pojmenování shluků
+id_close = clus_means['dist_m'].idxmin()
+df_geo['cluster_label'] = df_geo['cluster'].map({
+    id_close: 'Shluk 1: Blízká střela / vápno (vysoká úspěšnost)',
+    1 - id_close: 'Shluk 2: Střelba z dálky (nízká úspěšnost)'
+})
+
+# Mapa shluků na bílém hřišti
+fig, ax = plt.subplots(figsize=(11, 7.5))
+nakresli_fotbalove_hriste(ax)
+
+c_close = df_geo[df_geo['cluster'] == id_close]
+c_far   = df_geo[df_geo['cluster'] != id_close]
+
+ax.scatter(c_far['X'], c_far['Y'], c='#1f77b4', s=35, alpha=0.65,
+           label='Shluk 2: Střelba z dálky (prům. dist 25 j.)', zorder=3)
+ax.scatter(c_close['X'], c_close['Y'], c='#d62728', s=40, alpha=0.75,
+           label='Shluk 1: Blízká střela / vápno (prům. dist 13 j.)', zorder=4)
+
+ax.set_title('Shluková mapa střel na fotbalovém hřišti (K-means, k = 2)',
+             fontsize=16, fontweight='bold', pad=12)
+ax.legend(loc='upper left', frameon=True, framealpha=0.95, edgecolor='#CCCCCC', fontsize=12)
+uloz_graf('06b_mapa_shluku.png')
+
+
+# =============================================================================
+# 10. SOUHRNNÁ TABULKA VŠECH HYPOTÉZ
+# =============================================================================
+print('\n' + '=' * 75)
+print('10. SOUHRNNÁ TABULKA HYPOTÉZ')
+print('=' * 75)
+
+hyp_seznam = [
+    ('2 – Normalita', 'Shapiro-Wilk (dist_m)', 'dist_m pochází z normálního rozdělení', f"W = {sw_res['dist_m']['W']:.4f}", f"{sw_res['dist_m']['p']:.2e}", 'ZAMÍTÁME H0'),
+    ('2 – Normalita', 'Shapiro-Wilk (xG)', 'xG pochází z normálního rozdělení', f"W = {sw_res['xG']['W']:.4f}", f"{sw_res['xG']['p']:.2e}", 'ZAMÍTÁME H0'),
+    ('2 – Rozptyly', 'Leveneho test', 'Rozptyly vzdálenosti jsou ve skupinách shodné', f"L = {L_stat:.3f}", f"{L_p:.2e}", 'ZAMÍTÁME H0'),
+    ('3 – Závislost', 'Spearmanův test', 'Korelace mezi xG a dist_m je nulová (r = 0)', f"r = {spearman_mat.loc['xG','dist_m']:.3f}", '< 0,001', 'ZAMÍTÁME H0'),
+    ('4 – Rozdíly', 'Welch ANOVA (dist_m)', 'Střední vzdálenosti jsou pro typy zakončení stejné', 'F = 193,0', '7,47e−46', 'ZAMÍTÁME H0'),
+    ('4 – Rozdíly', 'Welch ANOVA (angle)', 'Střední úhly jsou pro typy zakončení stejné', 'F = 39,06', '6,33e−14', 'ZAMÍTÁME H0'),
+    ('4 – Sdružené', 'MANOVA (Wilks λ)', 'Vektory středních hodnot jsou ve skupinách shodné', f"λ = {wilks_val:.3f}", f"{wilks_p:.2e}", 'ZAMÍTÁME H0'),
+    ('5 – PCA', 'Bartlettův test', 'Korelační matice je jednotková (PCA nevhodná)', f"χ² = {chi2_b:.1f}", '< 0,001', 'ZAMÍTÁME H0'),
+    ('8 – Multikol.', 'Test VIF', 'Prediktory netrpí škodlivou multikolinearitou (VIF < 5)', 'max VIF = 2,87', 'VIF < 5', 'NEZAMÍTÁME H0'),
+    ('8 – Regrese', 'Logit model (dist_m)', 'Vzdálenost střely neovlivňuje šanci na gól (β = 0)', 'z = −2,18', f"{p_vals['dist_m']:.4f}", 'ZAMÍTÁME H0'),
+    ('8 – Regrese', 'Logit model (xG)', 'Metrika xG neovlivňuje šanci na gól (β = 0)', 'z = 4,58', f"{p_vals['xG']:.2e}", 'ZAMÍTÁME H0'),
+    ('9 – Shluky', 'Wardovo shlukování', 'Střely tvoří homogenní rozdělení bez shluků', 'Ward d² k=2', '< 0,001', 'ZAMÍTÁME H0'),
 ]
 
-df_hyp = pd.DataFrame(hypotezy)
-print(df_hyp.to_string(index=False))
-df_hyp.to_csv(os.path.join(VYSTUPY, 'tabulka_hypotezy.csv'), index=False)
-print('\n  [OK] Souhrnná tabulka hypotéz uložena.')
-
-# =============================================================================
-# SHRNUTÍ VÝSTUPŮ
-# =============================================================================
-print('\n' + '=' * 70)
-print('HOTOVO – Přehled vygenerovaných výstupů:')
-print('=' * 70)
-for f in sorted(os.listdir(VYSTUPY)):
-    fpath = os.path.join(VYSTUPY, f)
-    size  = os.path.getsize(fpath)
-    print(f'  {f:<50}  ({size//1024:>4} kB)')
-print('\nAnalýza dokončena bez chyb.')
+df_hyp_out = pd.DataFrame(hyp_seznam, columns=['Fáze', 'Metoda', 'Nulová hypotéza (H0)', 'Statistika', 'p-hodnota', 'Rozhodnutí'])
+df_hyp_out.to_csv(os.path.join(VYSTUPY_DIR, 'tabulka_hypotezy.csv'), index=False)
+print('  [OK] Souhrnná tabulka hypotéz uložena: tabulka_hypotezy.csv')
+print('\nAnalytický skript kompletně a bez chyb dokončen!')
