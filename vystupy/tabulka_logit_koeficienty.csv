@@ -1,0 +1,6 @@
+,β (koeficient),p-hodnota,OR = exp(β),OR 95% dolní,OR 95% horní,Verdikt
+const,-1.9698,0.058,0.1395,0.0182,1.0693,NEZAMÍTÁME H0
+dist_m,-0.081,0.0294,0.9222,0.8573,0.9919,ZAMÍTÁME H0
+angle_deg,-0.0087,0.4888,0.9914,0.9674,1.016,NEZAMÍTÁME H0
+xG,4.3305,0.0,75.9799,11.9017,485.0542,ZAMÍTÁME H0
+minute,0.0132,0.022,1.0133,1.0019,1.0248,ZAMÍTÁME H0

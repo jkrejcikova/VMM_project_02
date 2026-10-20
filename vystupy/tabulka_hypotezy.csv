@@ -1,0 +1,12 @@
+Fáze,H0,Statistika,p-hodnota,Verdikt
+2 – Normalita (SW),xG pochází z norm. rozdělení,W=0.5485,6.34e-39,ZAMÍTÁME H0
+2 – Normalita (SW),dist_m pochází z norm. rozdělení,W=0.9842,7.15e-07,ZAMÍTÁME H0
+2 – Normalita (SW),angle_deg pochází z norm. rozdělení,W=0.7926,6.32e-29,ZAMÍTÁME H0
+2 – Shoda rozptylů,Rozptyly dist_m jsou ve skupinách shodné,L=10.997,4.55e-07,ZAMÍTÁME H0 (heteroskedasticita)
+3 – Korelace,Korelace xG ↔ dist_m = 0,r=-0.732,< 0.001,ZAMÍTÁME H0
+4 – ANOVA (dist_m),Střed. vzdálenosti jsou shodné pro Foot/Head,F=192.982,7.47e-46,ZAMÍTÁME H0
+4 – ANOVA (angle),Střed. úhly jsou shodné pro Foot/Head,F=39.062,6.33e-14,ZAMÍTÁME H0
+4 – MANOVA,Vektory středních hodnot jsou shodné,Wilks λ,4.44e-27,ZAMÍTÁME H0
+5 – Bartlettův test,Korel. matice je jednotková (PCA nevhodná),χ²=2041.4,0.00e+00,ZAMÍTÁME H0 (korelace existují → PCA vhodná)
+7 – Logistická regrese,dist_m neovlivňuje pravděpodobnost gólu,β=-0.0810,2.94e-02,ZAMÍTÁME H0
+7 – Logistická regrese,xG neovlivňuje pravděpodobnost gólu,β=4.3305,4.68e-06,ZAMÍTÁME H0

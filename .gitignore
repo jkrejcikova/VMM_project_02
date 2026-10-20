@@ -1,0 +1,29 @@
+# Git – ignorované soubory pro VMM projekt
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Virtuální prostředí
+.venv/
+venv/
+env/
+
+# Systémové soubory
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Velké PDF přednášek (reference, nechceme je commitovat – jsou velké)
+materialy/VMM-*.pdf
+materialy/VMM_Projekty2026.pdf
+
+# Původní CSV v kořeni (zůstává v data/)
+shots_outcome_Final.csv
+
+# IDE
+.idea/
+.vscode/
+*.code-workspace
