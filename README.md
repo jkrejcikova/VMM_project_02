@@ -28,8 +28,9 @@ projekt_02/
 │   ├── 01b_hist_xG.png               # Histogram xG
 │   ├── 02_normalita_histogramy_qq.png # Histogramy + Q-Q grafy (Fáze 2)
 │   ├── 02b_mahal_chisq_qq.png        # Mahalanobis D² diagram
-│   ├── 03_korelacni_heatmapa.png     # Pearson + Spearman heatmapa
+│   ├── 03_korelacni_heatmapa.png     # Plná Spearmanova korelační heatmapa
 │   ├── 04_boxploty_shottype.png      # Boxploty dle typu zakončení
+│   ├── 04b_tukey_hsd.png             # Tukeyho HSD post-hoc test (95% IS)
 │   ├── 05_scree_plot.png             # Scree plot PCA
 │   ├── 05b_biplot_pca.png            # 2D biplot PCA
 │   ├── 06_dendrogram.png             # Hierarchický dendrogram

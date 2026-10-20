@@ -47,17 +47,17 @@ DATA   = os.path.join(BASE, 'data',     'shots_outcome_Final.csv')
 VYSTUPY = os.path.join(BASE, 'vystupy')
 os.makedirs(VYSTUPY, exist_ok=True)
 
-# Globální styl grafů – čistý, vhodný pro akademickou prezentaci
+# Globální styl grafů – čistý, minimalistický, bílý akademický styl
 plt.rcParams.update({
     'figure.dpi': 300,          # vysoké rozlišení pro tisk
     'savefig.dpi': 300,
     'font.size': 11,
     'axes.titlesize': 13,
     'axes.labelsize': 12,
-    'figure.facecolor': 'white',
-    'axes.facecolor': '#f8f9fa',
+    'figure.facecolor': '#FFFFFF',
+    'axes.facecolor': '#FFFFFF',
 })
-sns.set_theme(style='whitegrid', palette='tab10')
+sns.set_theme(style='white', palette='tab10')
 
 # =============================================================================
 # POMOCNÉ FUNKCE
@@ -311,8 +311,8 @@ ax_q.legend(fontsize=10)
 for spine in ax_q.spines.values():
     spine.set_edgecolor('#cccccc')
 
-plt.suptitle('Diagnostika normality – vzdálenost střely (dist_m)', y=1.01, fontsize=13)
-plt.tight_layout()
+plt.suptitle('Diagnostika normality – vzdálenost střely (dist_m)', y=0.98, fontsize=14, fontweight='bold', color='#222222')
+plt.tight_layout(rect=[0, 0, 1, 0.94])
 uloz('02_normalita_histogramy_qq.png')
 
 # --- Vícerozměrná normalita: Mahalanobisova vzdálenost ---
@@ -410,22 +410,21 @@ for c1 in CORR_COLS:
 
 # --- Vizualizace: JEDNA velká Spearmanova heatmapa ---
 # Spearmanova korelace je robustní vůči non-normalitě → preferovaná metoda.
-# Zobrazujeme pouze dolní trojúhelník (mask=np.triu) pro přehlednost.
-fig, ax = plt.subplots(figsize=(8, 7))
+# Plná matice bez ořezávání maskou, aby byla celá plocha vyplněná.
+fig, ax = plt.subplots(figsize=(8.5, 7.5))
 fig.patch.set_facecolor('white')
 ax.set_facecolor('white')
-mask = np.triu(np.ones_like(spearman_mat, dtype=bool))  # horní trojúhelník skryjeme
 
 # Zvětšené písmo čísel a popisků pro perfektní čitelnost
 sns.heatmap(spearman_mat, annot=True, fmt='.2f', cmap='RdBu_r',
             vmin=-1, vmax=1, center=0,
-            mask=mask, ax=ax,
-            annot_kws={'size': 13, 'weight': 'bold'},
-            linewidths=0.5, linecolor='#eeeeee',
-            cbar_kws={'shrink': 0.85, 'label': 'Spearmanovo r'})
-ax.set_title('Spearmanova korelační matice\n'
-             '(p < 0,001 pro všechny zobrazené páry)',
-             fontsize=14, pad=14, color='#222222')
+            square=True, ax=ax,
+            annot_kws={'size': 12, 'weight': 'bold'},
+            linewidths=0.8, linecolor='#ffffff',
+            cbar_kws={'shrink': 0.8, 'label': 'Spearmanovo r'})
+ax.set_title('Spearmanova korelační matice (plná matice)\n'
+             '(všechny vyznačené páry p < 0,001)',
+             fontsize=14, pad=14, color='#222222', fontweight='bold')
 ax.set_xticklabels(ax.get_xticklabels(), rotation=30, ha='right', fontsize=12)
 ax.set_yticklabels(ax.get_yticklabels(), rotation=0, fontsize=12)
 plt.tight_layout()
@@ -504,6 +503,50 @@ print(tukey_dist.summary())
 print('\nTukeyho HSD post-hoc test (angle_deg):')
 tukey_angle = pairwise_tukeyhsd(df_anova['angle_deg'], df_anova['shotType'], alpha=0.05)
 print(tukey_angle.summary())
+
+# --- Graf Tukeyho HSD post-hoc testu ---
+# Zobrazíme 95% intervaly spolehlivosti rozdílů průměrů pro dist_m i angle_deg
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+fig.patch.set_facecolor('white')
+
+# 1. Vzdálenost (dist_m)
+tukey_dist_df = pd.DataFrame(data=tukey_dist._results_table.data[1:], columns=tukey_dist._results_table.data[0])
+pairs_d = [f"{r['group1']} vs {r['group2']}" for _, r in tukey_dist_df.iterrows()]
+y_pos_d = np.arange(len(pairs_d))
+ax1.set_facecolor('white')
+ax1.errorbar(tukey_dist_df['meandiff'], y_pos_d,
+             xerr=[tukey_dist_df['meandiff'] - tukey_dist_df['lower'], tukey_dist_df['upper'] - tukey_dist_df['meandiff']],
+             fmt='o', color='#1f77b4', capsize=5, capthick=1.5, elinewidth=1.8, markersize=7)
+ax1.axvline(0, color='#d62728', linestyle='--', linewidth=1.5, label='Nulový rozdíl (0)')
+ax1.set_yticks(y_pos_d)
+ax1.set_yticklabels(pairs_d, fontsize=11)
+ax1.set_xlabel('Rozdíl průměrů vzdálenosti (j.) s 95% IS', fontsize=11)
+ax1.set_title('Vzdálenost střely (dist_m)', fontsize=12, fontweight='bold', color='#222222')
+ax1.legend(loc='lower right', fontsize=10)
+for spine in ax1.spines.values():
+    spine.set_edgecolor('#cccccc')
+
+# 2. Úhel (angle_deg)
+tukey_angle_df = pd.DataFrame(data=tukey_angle._results_table.data[1:], columns=tukey_angle._results_table.data[0])
+pairs_a = [f"{r['group1']} vs {r['group2']}" for _, r in tukey_angle_df.iterrows()]
+y_pos_a = np.arange(len(pairs_a))
+ax2.set_facecolor('white')
+ax2.errorbar(tukey_angle_df['meandiff'], y_pos_a,
+             xerr=[tukey_angle_df['meandiff'] - tukey_angle_df['lower'], tukey_angle_df['upper'] - tukey_angle_df['meandiff']],
+             fmt='o', color='#2ca02c', capsize=5, capthick=1.5, elinewidth=1.8, markersize=7)
+ax2.axvline(0, color='#d62728', linestyle='--', linewidth=1.5, label='Nulový rozdíl (0)')
+ax2.set_yticks(y_pos_a)
+ax2.set_yticklabels(pairs_a, fontsize=11)
+ax2.set_xlabel('Rozdíl průměrů úhlu (°) s 95% IS', fontsize=11)
+ax2.set_title('Střelecký úhel (angle_deg)', fontsize=12, fontweight='bold', color='#222222')
+ax2.legend(loc='lower right', fontsize=10)
+for spine in ax2.spines.values():
+    spine.set_edgecolor('#cccccc')
+
+plt.suptitle('Tukeyho HSD post-hoc test (95% intervaly spolehlivosti rozdílů průměrů)',
+             fontsize=13, y=0.98, fontweight='bold', color='#222222')
+plt.tight_layout(rect=[0, 0, 1, 0.94])
+uloz('04b_tukey_hsd.png')
 
 # --- MANOVA ---
 # Zkoumáme SOUČASNĚ vzdálenost i úhel. MANOVA zachytí i jejich korelaci.
@@ -633,11 +676,10 @@ sc = ax.scatter(scores[:, 0], scores[:, 1],
                 c=goal_col, cmap='RdBu_r', alpha=0.35, s=8, vmin=0, vmax=1, zorder=2)
 plt.colorbar(sc, ax=ax, label='Gól (1=Ano, 0=Ne)', shrink=0.85)
 
-# Loadings – zkrácené šipky (scale=3.0), texty s odsazením jen o 10 %,
-# ale clamp na rozsah osy, aby nepřetékaly přes okraj grafu.
+# Loadings – zkrácené šipky (scale=2.2), texty nepřetékají přes okraj grafu
 loadings = pca.components_.T[:, :2]
-scale    = 3.0   # zkrácené oproti původním 4.5
-ax_xlim  = (-5.5, 5.5)   # pevné osy pro konzistentní pohled
+scale    = 2.2   # zkrácené měřítko šipek dle zadání
+ax_xlim  = (-6.0, 6.0)   # dostatečně široké meze, aby se popisky vešly dovnitř
 ax_ylim  = (-4.5, 4.5)
 ax.set_xlim(*ax_xlim)
 ax.set_ylim(*ax_ylim)
@@ -645,13 +687,13 @@ ax.set_ylim(*ax_ylim)
 for j, var in enumerate(PCA_COLS):
     lx, ly = loadings[j, 0] * scale, loadings[j, 1] * scale
     ax.annotate('', xy=(lx, ly), xytext=(0, 0),
-                arrowprops=dict(arrowstyle='->', color='#c0392b', lw=2))
-    # Text posunutý o 12 % za koncem šipky, ale omezený na rozsah osy
-    tx = np.clip(lx * 1.18, ax_xlim[0] + 0.3, ax_xlim[1] - 0.3)
-    ty = np.clip(ly * 1.18, ax_ylim[0] + 0.15, ax_ylim[1] - 0.15)
-    ax.text(tx, ty, var, fontsize=10, color='#c0392b', fontweight='bold',
+                arrowprops=dict(arrowstyle='->', color='#d62728', lw=2))
+    # Popisek těsně za hrotem šipky s bezpečným rámečkem, bez přetékání
+    tx = np.clip(lx * 1.25, ax_xlim[0] + 0.6, ax_xlim[1] - 0.6)
+    ty = np.clip(ly * 1.25, ax_ylim[0] + 0.4, ax_ylim[1] - 0.4)
+    ax.text(tx, ty, var, fontsize=11, color='#222222', fontweight='bold',
             ha='center', va='center',
-            bbox=dict(boxstyle='round,pad=0.2', fc='white', ec='none', alpha=0.7))
+            bbox=dict(boxstyle='round,pad=0.25', fc='white', ec='#cccccc', alpha=0.9))
 
 ax.axhline(0, color='#aaaaaa', linestyle='--', linewidth=0.8)
 ax.axvline(0, color='#aaaaaa', linestyle='--', linewidth=0.8)
@@ -800,11 +842,7 @@ ax.set_ylim([0, 1.02])
 uloz('07_roc_krivka.png')
 print(f'\nAUC logistické regrese: {roc_auc:.4f}')
 
-# --- Forest plot (Odds Ratios) na LOGARITMICKÉ ose ---
-# Lesní graf přehledně zobrazuje velikost efektu (OR) s intervaly spolehlivosti.
-# OR > 1 → prediktor ZVYŠUJE šanci na gól, OR < 1 → SNIŽUJE.
-# Logaritmická osa X: OR jsou multiplikativní → log-měřítko je přirozené
-# (symetrické zobrazení pro OR < 1 i OR > 1, xG nesmrskne ostatní).
+# Forest plot – Odds Ratios s logaritmickým měřítkem osy X
 reg_plot = reg_tabulka.drop('const', errors='ignore')
 variables = reg_plot.index.tolist()
 OR_vals   = reg_plot['OR = exp(β)'].values.astype(float)
@@ -821,20 +859,26 @@ ax.errorbar(OR_vals, y_pos,
             xerr=[OR_vals - lo_vals, hi_vals - OR_vals],
             fmt='o', color='#1f77b4', capsize=6, capthick=2,
             elinewidth=2, markersize=9, zorder=4)
-ax.axvline(x=1, color='#d62728', linestyle='--', linewidth=2, label='OR = 1 (žádný efekt)')
-ax.set_xscale('log')   # LOGARITMICKÁ OSA – xG s OR≈76 nebude smrskat ostatní
+ax.axvline(x=1, color='#d62728', linestyle='--', linewidth=2, label='OR = 1 (referenční úroveň bez vlivu)')
+ax.set_xscale('log')   # LOGARITMICKÁ OSA – xG nesmrskne ostatní proměnné na nulu
+
+# Bezpečné meze osy X s dostatečným prostorem pro texty vpravo
+min_x = min(lo_vals) * 0.4
+max_x = max(hi_vals) * 5.0
+ax.set_xlim(min_x, max_x)
+
 ax.set_yticks(y_pos)
-ax.set_yticklabels(variables, fontsize=12)
-ax.set_xlabel('Odds Ratio (OR) – logaritmická osa  |  95% IS', fontsize=12)
-ax.set_title('Forest plot – Odds Ratios logistické regrese\n(logaritmická osa X)', fontsize=13, color='#222222')
-ax.legend(fontsize=11)
+ax.set_yticklabels(variables, fontsize=12, fontweight='bold', color='#222222')
+ax.set_xlabel('Odds Ratio (OR) – logaritmická osa X  |  95% interval spolehlivosti', fontsize=12, color='#222222')
+ax.set_title('Forest plot – Odds Ratios logistické regrese (logaritmická osa X)', fontsize=13, color='#222222', fontweight='bold')
+ax.legend(fontsize=10, loc='lower right')
 ax.grid(axis='x', color='#eeeeee', linewidth=0.8)
 
-# Přidáme p-hodnoty a hvězdičky napravo
+# Přidáme p-hodnoty a signifikanci napravo s dostatečným odstupem
 for i, (p, hi) in enumerate(zip(reg_plot['p-hodnota'].values, hi_vals)):
     znak = '***' if p < 0.001 else '**' if p < 0.01 else '*' if p < 0.05 else 'ns'
-    ax.text(hi * 1.05, i, f' p={p:.3f} {znak}', va='center', fontsize=9,
-            color='#333333')
+    ax.text(hi * 1.35, i, f' p = {p:.3f} {znak}', va='center', fontsize=10,
+            color='#222222', fontweight='bold')
 
 for spine in ax.spines.values():
     spine.set_edgecolor('#cccccc')
