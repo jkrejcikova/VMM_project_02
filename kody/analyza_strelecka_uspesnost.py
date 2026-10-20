@@ -71,41 +71,51 @@ def uloz(nazev_souboru):
     print(f'  [OK] Graf uložen: {nazev_souboru}')
 
 
-def nakresli_hrice(ax, barva_povrchu='#3a8a3a'):
+def nakresli_hrice(ax):
     """
     Nakreslí schematické fotbalové hřiště (100x100 jednotek) na osu ax.
+    BÍLÉ pozadí (#FFFFFF), čáry v decentní šedé (#b0b0b0, linewidth=1.2).
     Souřadnice X = délka hřiště (0=levá branka, 100=pravá branka),
     Y = šířka hřiště (0=spodní, 100=horní okraj).
-    Schéma je zjednodušené – brankové plochy, trestné území, střed.
     """
-    ax.set_facecolor(barva_povrchu)
+    # Bílé pozadí – žádná tráva, čistý akademický styl
+    ax.set_facecolor('#FFFFFF')
     ax.set_xlim(0, 100)
     ax.set_ylim(0, 100)
 
-    def rect(x, y, w, h, **kw):
-        ax.add_patch(mpatches.Rectangle((x, y), w, h, **kw))
+    # Barva a tloušťka čar hřiště – decentní šedá
+    LC = '#b0b0b0'   # line color
+    LW = 1.2         # line width
 
-    kw_line = dict(edgecolor='white', facecolor='none', linewidth=1.5)
+    def rect(x, y, w, h):
+        ax.add_patch(mpatches.Rectangle((x, y), w, h,
+                     edgecolor=LC, facecolor='none', linewidth=LW))
+
     # Ohraničení hřiště
-    rect(0, 0, 100, 100, **kw_line)
+    rect(0, 0, 100, 100)
     # Středová čára
-    ax.plot([50, 50], [0, 100], color='white', linewidth=1.5)
-    # Středový kruh (poloměr ~9 jednotek)
-    kruh = plt.Circle((50, 50), 9.15, color='white', fill=False, linewidth=1.5)
+    ax.plot([50, 50], [0, 100], color=LC, linewidth=LW)
+    # Středový kruh (poloměr ~9.15 jednotek)
+    kruh = plt.Circle((50, 50), 9.15, color=LC, fill=False, linewidth=LW)
     ax.add_patch(kruh)
-    ax.plot(50, 50, 'o', color='white', markersize=3)
-    # Levé pokutové území
-    rect(0, 21.1, 16.5, 57.8, **kw_line)
-    rect(0, 36.8, 5.5, 26.4, **kw_line)
-    # Pravé pokutové území
-    rect(83.5, 21.1, 16.5, 57.8, **kw_line)
-    rect(94.5, 36.8, 5.5, 26.4, **kw_line)
-    # Brány
-    rect(0, 45.2, -1.5, 9.6, edgecolor='white', facecolor='white', linewidth=1.2)
-    rect(100, 45.2, 1.5, 9.6, edgecolor='white', facecolor='white', linewidth=1.2)
+    ax.plot(50, 50, 'o', color=LC, markersize=2.5)
+    # Levé pokutové území (branka na X=0)
+    rect(0, 21.1, 16.5, 57.8)
+    rect(0, 36.8, 5.5,  26.4)
+    # Pravé pokutové území (branka na X=100)
+    rect(83.5, 21.1, 16.5, 57.8)
+    rect(94.5, 36.8, 5.5,  26.4)
+    # Brány – tenký obdélník za brankovou čárou
+    ax.add_patch(mpatches.Rectangle((0, 45.2), -1.5, 9.6,
+                 edgecolor=LC, facecolor='#eeeeee', linewidth=LW))
+    ax.add_patch(mpatches.Rectangle((100, 45.2), 1.5, 9.6,
+                 edgecolor=LC, facecolor='#eeeeee', linewidth=LW))
 
     ax.set_xlabel('X (délka hřiště)')
     ax.set_ylabel('Y (šířka hřiště)')
+    ax.tick_params(colors='#555555')
+    for spine in ax.spines.values():
+        spine.set_edgecolor('#b0b0b0')
 
 
 # =============================================================================
@@ -204,16 +214,17 @@ print('  [OK] Tabulka popisné statistiky uložena.')
 # ---- Mapa střel na hřišti -----------------------------------------------
 print('\nKreslím mapu střel...')
 fig, ax = plt.subplots(figsize=(12, 8))
+fig.patch.set_facecolor('white')
 nakresli_hrice(ax)
-# Göly zobrazíme červeně, ostatní střely modře poloprůhledně.
-cols_map = df_geo['goal'].map({0: '#4575b4', 1: '#d73027'})
+# Barvy: göly červeně (#d62728), ostatní modře (#1f77b4) – na bílém pozadí výrazné
+barvy_goal = df_geo['goal'].map({0: '#1f77b4', 1: '#d62728'})
 ax.scatter(df_geo['X'], df_geo['Y'],
-           c=cols_map, alpha=0.35, s=8, linewidths=0)
+           c=barvy_goal, alpha=0.35, s=8, linewidths=0, zorder=3)
 # Ručně přidáme legendu
-ax.scatter([], [], color='#d73027', alpha=0.7, s=30, label='Gól')
-ax.scatter([], [], color='#4575b4', alpha=0.7, s=30, label='Nezakončeno gólem')
-ax.set_title('Mapa střel (fotbalové hřiště 100×100 jednotek)', pad=14)
-ax.legend(loc='upper left', framealpha=0.9)
+ax.scatter([], [], color='#d62728', alpha=0.8, s=40, label='Gól')
+ax.scatter([], [], color='#1f77b4', alpha=0.8, s=40, label='Nezakončeno gólem')
+ax.set_title('Mapa střel (fotbalové hřiště 100×100 jednotek)', pad=14, color='#222222')
+ax.legend(loc='upper left', framealpha=0.9, frameon=True, edgecolor='#cccccc')
 uloz('01_mapa_strel.png')
 
 # ---- Histogram xG ----------------------------------------------------------
@@ -259,31 +270,48 @@ for col in DIAG_COLS:
     print(f'{col:<15} {W:>8.4f} {p:>12.4e} {verdikt:>20} {skew:>9.3f} {kurt:>10.3f}')
 
 # --- Histogramy s normální křivkou + Q-Q grafy ---
-print('\nKreslím histogramy a Q-Q grafy...')
-fig, axes = plt.subplots(2, 3, figsize=(15, 9))
-for i, col in enumerate(DIAG_COLS):
-    data_col = df_geo[col].dropna()
-    # Histogram
-    ax_h = axes[0, i]
-    ax_h.hist(data_col, bins=40, density=True, color='#4575b4',
-              edgecolor='white', alpha=0.75, label='Empirické rozdělení')
-    # Proložení normální křivkou: mean a std z dat
-    mu, sigma = data_col.mean(), data_col.std()
-    x_norm = np.linspace(data_col.min(), data_col.max(), 200)
-    ax_h.plot(x_norm, stats.norm.pdf(x_norm, mu, sigma),
-              'r-', linewidth=2, label='Normální křivka')
-    ax_h.set_title(f'{col}\n(šikmost={sw_results[col]["skew"]:.2f},'
-                   f' špičatost={sw_results[col]["kurt"]:.2f})')
-    ax_h.set_xlabel(col)
-    ax_h.set_ylabel('Hustota')
-    ax_h.legend(fontsize=8)
-    # Q-Q graf (kvantil-kvantil): body leží na přímce → normalita
-    ax_q = axes[1, i]
-    stats.probplot(data_col, dist='norm', plot=ax_q)
-    ax_q.set_title(f'Q-Q graf: {col}')
-    ax_q.get_lines()[0].set(markersize=2, alpha=0.4, color='#4575b4')
+# Zobrazíme pouze dist_m (1 řádek, 2 sloupce): histogram vlevo, Q-Q vpravo.
+# Tím se slide 4 nepřeplní a grafy zůstanou čitelné.
+print('\nKreslím histogram a Q-Q graf dist_m...')
+fig, (ax_h, ax_q) = plt.subplots(1, 2, figsize=(12, 5))
+fig.patch.set_facecolor('white')
 
-plt.suptitle('Diagnostika normality: histogramy a Q-Q grafy', y=1.01, fontsize=14)
+col = 'dist_m'
+data_col = df_geo[col].dropna()
+mu, sigma = data_col.mean(), data_col.std()
+
+# Histogram s proloženou normální křivkou
+ax_h.set_facecolor('white')
+ax_h.hist(data_col, bins=35, density=True, color='#1f77b4',
+          edgecolor='white', alpha=0.75, label='Empirické rozdělení')
+x_norm = np.linspace(data_col.min(), data_col.max(), 300)
+ax_h.plot(x_norm, stats.norm.pdf(x_norm, mu, sigma),
+          'r-', linewidth=2, label='Normální křivka N(μ,σ²)')
+ax_h.set_title(f'Histogram: {col}\n'
+               f'(šikmost={sw_results[col]["skew"]:.2f},'
+               f'  špičatost={sw_results[col]["kurt"]:.2f},'
+               f'  SW p={sw_results[col]["p"]:.2e})',
+               fontsize=12)
+ax_h.set_xlabel(col)
+ax_h.set_ylabel('Hustota pravděpodobnosti')
+ax_h.legend(fontsize=10)
+for spine in ax_h.spines.values():
+    spine.set_edgecolor('#cccccc')
+
+# Q-Q graf
+ax_q.set_facecolor('white')
+(osm_q, osm_th), (slope, intercept, r) = stats.probplot(data_col, dist='norm')
+ax_q.scatter(osm_th, osm_q, alpha=0.45, s=10, color='#1f77b4', label='Data')
+x_line = np.array([osm_th.min(), osm_th.max()])
+ax_q.plot(x_line, slope * x_line + intercept, 'r-', linewidth=2, label='Referenční přímka')
+ax_q.set_title(f'Q-Q graf: {col}\n(odchylka od přímky → non-normalita)', fontsize=12)
+ax_q.set_xlabel('Teoretické kvantily N(0,1)')
+ax_q.set_ylabel('Empirické kvantily')
+ax_q.legend(fontsize=10)
+for spine in ax_q.spines.values():
+    spine.set_edgecolor('#cccccc')
+
+plt.suptitle('Diagnostika normality – vzdálenost střely (dist_m)', y=1.01, fontsize=13)
 plt.tight_layout()
 uloz('02_normalita_histogramy_qq.png')
 
@@ -380,20 +408,26 @@ for c1 in CORR_COLS:
             r, p = stats.pearsonr(df_corr[c1], df_corr[c2])
             p_pearson.loc[c1, c2] = p
 
-# --- Vizualizace: Heatmapy obou korelačních matic ---
-fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+# --- Vizualizace: JEDNA velká Spearmanova heatmapa ---
+# Spearmanova korelace je robustní vůči non-normalitě → preferovaná metoda.
+# Zobrazujeme pouze dolní trojúhelník (mask=np.triu) pro přehlednost.
+fig, ax = plt.subplots(figsize=(8, 7))
+fig.patch.set_facecolor('white')
+ax.set_facecolor('white')
+mask = np.triu(np.ones_like(spearman_mat, dtype=bool))  # horní trojúhelník skryjeme
 
-for ax, mat, title in zip(axes,
-                           [pearson_mat, spearman_mat],
-                           ['Pearsonova korelační matice', 'Spearmanova korelační matice']):
-    mask = np.triu(np.ones_like(mat, dtype=bool))  # zobrazíme jen dolní trojúhelník
-    sns.heatmap(mat, annot=True, fmt='.2f', cmap='RdBu_r',
-                vmin=-1, vmax=1, center=0,
-                mask=mask, ax=ax,
-                annot_kws={'size': 10})
-    ax.set_title(title, pad=10)
-    ax.set_xticklabels(ax.get_xticklabels(), rotation=30, ha='right')
-
+# Zvětšené písmo čísel a popisků pro perfektní čitelnost
+sns.heatmap(spearman_mat, annot=True, fmt='.2f', cmap='RdBu_r',
+            vmin=-1, vmax=1, center=0,
+            mask=mask, ax=ax,
+            annot_kws={'size': 13, 'weight': 'bold'},
+            linewidths=0.5, linecolor='#eeeeee',
+            cbar_kws={'shrink': 0.85, 'label': 'Spearmanovo r'})
+ax.set_title('Spearmanova korelační matice\n'
+             '(p < 0,001 pro všechny zobrazené páry)',
+             fontsize=14, pad=14, color='#222222')
+ax.set_xticklabels(ax.get_xticklabels(), rotation=30, ha='right', fontsize=12)
+ax.set_yticklabels(ax.get_yticklabels(), rotation=0, fontsize=12)
 plt.tight_layout()
 uloz('03_korelacni_heatmapa.png')
 
@@ -589,29 +623,45 @@ uloz('05_scree_plot.png')
 n_pca = min(1500, len(X_pca))  # omezíme počet bodů pro přehlednost
 idx_spl = np.random.choice(len(X_pca), n_pca, replace=False)
 scores  = X_pca[idx_spl, :2]
-goal_col = df_pca.iloc[idx_spl].index.map(lambda i: df_geo.loc[i, 'goal']) if False else \
-           df_geo[df_geo.index.isin(df_pca.index)].loc[df_pca.index[idx_spl], 'goal'].values
+goal_col = df_geo[df_geo.index.isin(df_pca.index)].loc[df_pca.index[idx_spl], 'goal'].values
 
-fig, ax = plt.subplots(figsize=(10, 8))
+fig, ax = plt.subplots(figsize=(9, 7))
+fig.patch.set_facecolor('white')
+ax.set_facecolor('white')
+
 sc = ax.scatter(scores[:, 0], scores[:, 1],
-                c=goal_col, cmap='RdBu_r', alpha=0.35, s=8, vmin=0, vmax=1)
-plt.colorbar(sc, ax=ax, label='Gól (1=Ano, 0=Ne)')
+                c=goal_col, cmap='RdBu_r', alpha=0.35, s=8, vmin=0, vmax=1, zorder=2)
+plt.colorbar(sc, ax=ax, label='Gól (1=Ano, 0=Ne)', shrink=0.85)
 
-# Loadings (faktorové zátěže) jako šipky
+# Loadings – zkrácené šipky (scale=3.0), texty s odsazením jen o 10 %,
+# ale clamp na rozsah osy, aby nepřetékaly přes okraj grafu.
 loadings = pca.components_.T[:, :2]
-scale    = 4.5   # měřítko pro čitelnost šipek
-for j, var in enumerate(PCA_COLS):
-    ax.annotate('', xy=(loadings[j, 0]*scale, loadings[j, 1]*scale),
-                xytext=(0, 0),
-                arrowprops=dict(arrowstyle='->', color='black', lw=2))
-    ax.text(loadings[j, 0]*scale*1.12, loadings[j, 1]*scale*1.08,
-            var, fontsize=10, color='black', fontweight='bold')
+scale    = 3.0   # zkrácené oproti původním 4.5
+ax_xlim  = (-5.5, 5.5)   # pevné osy pro konzistentní pohled
+ax_ylim  = (-4.5, 4.5)
+ax.set_xlim(*ax_xlim)
+ax.set_ylim(*ax_ylim)
 
-ax.axhline(0, color='gray', linestyle='--', linewidth=0.8)
-ax.axvline(0, color='gray', linestyle='--', linewidth=0.8)
-ax.set_xlabel(f'PC1 ({expl_var[0]:.1f}% rozptylu)')
-ax.set_ylabel(f'PC2 ({expl_var[1]:.1f}% rozptylu)')
-ax.set_title('Biplot PCA – PC1 vs PC2\n(šipky = příspěvky proměnných, body = střely)')
+for j, var in enumerate(PCA_COLS):
+    lx, ly = loadings[j, 0] * scale, loadings[j, 1] * scale
+    ax.annotate('', xy=(lx, ly), xytext=(0, 0),
+                arrowprops=dict(arrowstyle='->', color='#c0392b', lw=2))
+    # Text posunutý o 12 % za koncem šipky, ale omezený na rozsah osy
+    tx = np.clip(lx * 1.18, ax_xlim[0] + 0.3, ax_xlim[1] - 0.3)
+    ty = np.clip(ly * 1.18, ax_ylim[0] + 0.15, ax_ylim[1] - 0.15)
+    ax.text(tx, ty, var, fontsize=10, color='#c0392b', fontweight='bold',
+            ha='center', va='center',
+            bbox=dict(boxstyle='round,pad=0.2', fc='white', ec='none', alpha=0.7))
+
+ax.axhline(0, color='#aaaaaa', linestyle='--', linewidth=0.8)
+ax.axvline(0, color='#aaaaaa', linestyle='--', linewidth=0.8)
+ax.set_xlabel(f'PC1 ({expl_var[0]:.1f} % rozptylu)', fontsize=12)
+ax.set_ylabel(f'PC2 ({expl_var[1]:.1f} % rozptylu)', fontsize=12)
+ax.set_title('Biplot PCA – PC1 vs PC2\n(šipky = příspěvky proměnných, body = střely barevně dle gólu)',
+             fontsize=13, color='#222222')
+for spine in ax.spines.values():
+    spine.set_edgecolor('#cccccc')
+plt.tight_layout()
 uloz('05b_biplot_pca.png')
 
 
@@ -673,14 +723,16 @@ print(f'\nPopis shluků:\n{label_map}')
 
 # --- Mapa shluků na hřišti ---
 fig, ax = plt.subplots(figsize=(13, 8))
+fig.patch.set_facecolor('white')
 nakresli_hrice(ax)
-barvy_shluk = {label_map[0]: '#d73027', label_map[1]: '#4575b4'}
+barvy_shluk = {label_map[0]: '#d62728', label_map[1]: '#1f77b4'}
 for popis, barva in barvy_shluk.items():
     pod = df_clus[df_clus['shluk_popis'] == popis]
     ax.scatter(pod['X'], pod['Y'], c=barva, alpha=0.35, s=8,
-               linewidths=0, label=popis)
-ax.set_title('Mapa shluků střel na fotbalovém hřišti\n(K-means, k=2)')
-ax.legend(loc='upper left', framealpha=0.9)
+               linewidths=0, label=popis, zorder=3)
+ax.set_title('Mapa shluků střel na fotbalovém hřišti\n(K-means, k=2)',
+             color='#222222')
+ax.legend(loc='upper left', framealpha=0.9, frameon=True, edgecolor='#cccccc')
 uloz('06b_mapa_shluku.png')
 
 # Podíl gólů v jednotlivých shlucích
@@ -748,32 +800,45 @@ ax.set_ylim([0, 1.02])
 uloz('07_roc_krivka.png')
 print(f'\nAUC logistické regrese: {roc_auc:.4f}')
 
-# --- Forest plot (Odds Ratios) ---
+# --- Forest plot (Odds Ratios) na LOGARITMICKÉ ose ---
 # Lesní graf přehledně zobrazuje velikost efektu (OR) s intervaly spolehlivosti.
 # OR > 1 → prediktor ZVYŠUJE šanci na gól, OR < 1 → SNIŽUJE.
+# Logaritmická osa X: OR jsou multiplikativní → log-měřítko je přirozené
+# (symetrické zobrazení pro OR < 1 i OR > 1, xG nesmrskne ostatní).
 reg_plot = reg_tabulka.drop('const', errors='ignore')
 variables = reg_plot.index.tolist()
-OR_vals   = reg_plot['OR = exp(β)'].values
-lo_vals   = reg_plot['OR 95% dolní'].values
-hi_vals   = reg_plot['OR 95% horní'].values
+OR_vals   = reg_plot['OR = exp(β)'].values.astype(float)
+lo_vals   = reg_plot['OR 95% dolní'].values.astype(float)
+hi_vals   = reg_plot['OR 95% horní'].values.astype(float)
 y_pos     = np.arange(len(variables))
 
-fig, ax = plt.subplots(figsize=(9, 5))
+fig, ax = plt.subplots(figsize=(10, 5))
+fig.patch.set_facecolor('white')
+ax.set_facecolor('white')
+
+# Chybové úsečky – asymetrické (lo/hi jsou absolutní hodnoty OR)
 ax.errorbar(OR_vals, y_pos,
             xerr=[OR_vals - lo_vals, hi_vals - OR_vals],
-            fmt='o', color='#4575b4', capsize=5, capthick=2,
-            elinewidth=2, markersize=8)
-ax.axvline(x=1, color='red', linestyle='--', linewidth=2, label='OR = 1 (žádný efekt)')
+            fmt='o', color='#1f77b4', capsize=6, capthick=2,
+            elinewidth=2, markersize=9, zorder=4)
+ax.axvline(x=1, color='#d62728', linestyle='--', linewidth=2, label='OR = 1 (žádný efekt)')
+ax.set_xscale('log')   # LOGARITMICKÁ OSA – xG s OR≈76 nebude smrskat ostatní
 ax.set_yticks(y_pos)
-ax.set_yticklabels(variables)
-ax.set_xlabel('Odds Ratio (OR) s 95% intervalem spolehlivosti')
-ax.set_title('Forest plot – Odds Ratios logistické regrese')
-ax.legend()
-# Přidáme p-hodnoty napravo
-for i, (p, orv) in enumerate(zip(reg_plot['p-hodnota'].values, OR_vals)):
+ax.set_yticklabels(variables, fontsize=12)
+ax.set_xlabel('Odds Ratio (OR) – logaritmická osa  |  95% IS', fontsize=12)
+ax.set_title('Forest plot – Odds Ratios logistické regrese\n(logaritmická osa X)', fontsize=13, color='#222222')
+ax.legend(fontsize=11)
+ax.grid(axis='x', color='#eeeeee', linewidth=0.8)
+
+# Přidáme p-hodnoty a hvězdičky napravo
+for i, (p, hi) in enumerate(zip(reg_plot['p-hodnota'].values, hi_vals)):
     znak = '***' if p < 0.001 else '**' if p < 0.01 else '*' if p < 0.05 else 'ns'
-    ax.text(hi_vals[i] + 0.02, i, f' p={p:.3f} {znak}', va='center', fontsize=9)
-ax.set_xlim(0, max(hi_vals) * 1.25)
+    ax.text(hi * 1.05, i, f' p={p:.3f} {znak}', va='center', fontsize=9,
+            color='#333333')
+
+for spine in ax.spines.values():
+    spine.set_edgecolor('#cccccc')
+plt.tight_layout()
 uloz('07b_forest_plot.png')
 
 
